@@ -1,0 +1,44 @@
+{
+    "START": [
+        {
+            "name": "nmap",
+            "run_once": true
+        }
+    ],
+    "SMB_SERVICE_FOUND": [
+        {
+            "name": "smbclient-anonymous",
+            "run_once": true
+        }
+    ],
+    "LDAP_SERVICE_FOUND": [
+        {
+            "name": "ldap-base"
+        }
+    ],
+    "LDAP_DOMAIN_CONTROLLER": [
+        {
+            "name": "ldap-anonymous-dc"
+        }
+    ],
+    "RPC_SERVICE_FOUND": [
+        {
+            "name": "rpc-anonymous",
+            "run_once": true
+        }
+    ],
+    "RPC_ACCESS": [
+        {
+            "name": "rpc-list-users",
+            "run_once": true
+        }
+    ],
+    "RPC_USER_LIST": [
+        {
+            "name": "hydra-nsr-spraying"
+        },
+        {
+            "name": "asreproast"
+        }
+    ]
+}
