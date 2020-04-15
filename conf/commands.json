@@ -60,7 +60,7 @@
     },
     "rpc-anonymous": {
         "name": "rpc-anonymous",
-        "cmd": "rpcclient -U ''%'' {ip} -c 'AZERTY;quit 2>/dev/null'",
+        "cmd": "rpcclient -U ''%'' {ip} -c 'AZERTY;quit' 2>/dev/null'",
         "patterns": [
             {
                 "command not found: AZERTY": [
@@ -71,7 +71,7 @@
     },
     "rpc-list-users": {
         "name": "rpc-list-users",
-        "cmd": "rpcclient -U ''%'' {ip} -c 'enumdomusers;quit' 2>/dev/null | cut -d[ -f2 | cut -d] -f1 > {output_dir}rpc-users.lst; [ -s {output_dir}rpc-users.lst ] && echo 'USERS FOUND'",
+        "cmd": "rpcclient -U ''%'' {ip} -c 'enumdomusers;quit' 2>/dev/null | cut -d[ -f2 | cut -d] -f1 > {output_dir}rpc-users.lst; [ -s {output_dir}rpc-users.lst ] && grep -vq 'result was' {output_dir}rpc_users.lst && echo 'USERS FOUND'",
         "store_static": [
             {
                 "users_file": "{output_dir}rpc-users.lst"
