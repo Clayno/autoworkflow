@@ -1,5 +1,0 @@
-{
-    "nmap": {
-        "command": "nmap -v -sSVC -O -Pn {target}"
-    }
-}

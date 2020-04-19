@@ -1,6 +1,7 @@
 import asyncio
 import logging
-import json
+import toml
+from base64 import b64decode
 from utils.utils import run_cmd, get_fields
 
 class EventManager:
@@ -43,10 +44,12 @@ class EventManager:
 
     def load_conf(self, workflow):
         self.logger.info(f"Loading workflow {self.workflow}")
-        with open(f"conf/{workflow}.json") as f:
-            workflow = json.loads(f.read())
-        with open(f"conf/commands.json") as f:
-            commands = json.loads(f.read())
+        workflow = toml.load(f"conf/{workflow}.toml")
+        commands = toml.load(f"conf/commands.toml")
+        for key, command in commands.items():
+            base64 = command.get("base64", None)
+            if base64:
+                commands[key]['cmd'] = b64decode(command['cmd']).decode('utf-8')
         self.workflow = {
                 event: [
                     {**commands[cmd['name']], **cmd} for cmd in cmds

@@ -104,6 +104,9 @@
                 ]
             }
         ]       
+    },
+    "extract-links-html": {
+        "name": "extract-links-html"
     }
 }
 

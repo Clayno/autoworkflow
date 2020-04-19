@@ -2,12 +2,8 @@ import asyncio
 import logging
 import json
 import re
+import toml
 from string import Formatter
-
-def get_conf(module_name):
-    with open("conf/modules.json") as f:
-        conf = json.loads(f.read())
-    return conf.get(module_name)
 
 async def launch_module(module_name, target):
     module_class = getattr(__import__(f'modules.{module_name}',
@@ -68,8 +64,8 @@ def generate_graph(workflow):
     import json
     from graphviz import Digraph
     dot = Digraph(comment='Workflow', format='png')
-    workflow = json.loads(open(f"conf/{workflow}.json").read())
-    commands = json.loads(open("conf/commands.json").read())
+    workflow = toml.load(f"conf/{workflow}.toml")
+    commands = toml.load("conf/commands.toml")
     workflow = {
         event: [
             {**commands[cmd['name']], **cmd} for cmd in cmds
@@ -86,4 +82,12 @@ def generate_graph(workflow):
                         edges.add((event, event_to_fire))
     for edge in edges:
         dot.edge(edge[0], edge[1])
-    dot.render('workflow.gv', view=True)
+    dot.render('output/workflow.gv', view=True)
+
+
+def parse_url(url):
+    from urllib.parse import urlparse
+    parsed = urlparse(url)
+    domain = parsed.netloc if ':' not in parsed.netloc else parsed.netloc.split(':')[0]
+    top_domain = '.'.join(domain.split('.')[-2:]) if len(domain.split('.')) > 2 else domain
+    return domain, top_domain

