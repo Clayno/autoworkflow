@@ -38,7 +38,7 @@ if __name__ == "__main__":
     parser.add_argument('-i', '--ip', action='store', help='Target IP')
     parser.add_argument('-u', '--url', action='store', help='Target URL')
     parser.add_argument('-w', '--workflow', action='store', help='Workflow to follow', required=True)
-    parser.add_argument('-v', '--visualize_graph', action='store_true')
+    parser.add_argument('--visualize_graph', action='store_true')
     args = parser.parse_args()
     if args.visualize_graph:
         generate_graph(args.workflow)
@@ -49,12 +49,13 @@ if __name__ == "__main__":
     setup_logger(level=level)
     logger = AutoWorkflowAdapter()
     if args.url :
-        domain, top_domain = parse_url(args.url)
+        domain, top_domain, base_url = parse_url(args.url)
         target_id = domain
         target = Target()
         target.stored['url'] = args.url
         target.stored['domain'] = domain
         target.stored['top_domain'] = top_domain
+        target.stored['base_url'] = base_url
     if args.ip:
         target_id = args.ip
         target = Target()

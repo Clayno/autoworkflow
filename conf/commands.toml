@@ -58,7 +58,8 @@ cmd = "rpcclient -U ''%'' {ip} -c 'AZERTY;quit' 2>/dev/null'"
 
 [rpc-list-users]
 name = "rpc-list-users"
-cmd = "rpcclient -U ''%'' {ip} -c 'enumdomusers;quit' 2>/dev/null | cut -d[ -f2 | cut -d] -f1 > {output_dir}rpc-users.lst; [ -s {output_dir}rpc-users.lst ] && grep -vq 'result was' {output_dir}rpc_users.lst && echo 'USERS FOUND'"
+cmd = """rpcclient -U ''%'' {ip} -c 'enumdomusers;quit' 2>/dev/null | cut -d[ -f2 | cut -d] -f1 > {output_dir}rpc-users.lst; 
+[ -s {output_dir}rpc-users.lst ] && grep -vq 'result was' {output_dir}rpc_users.lst && echo 'USERS FOUND'"""
 
   [[rpc-list-users.store_static]]
   users_file = "{output_dir}rpc-users.lst"
@@ -74,7 +75,8 @@ cmd = "hydra -L {users_file} -e nsr smb://{ip}"
 
 [asreproast]
 name = "asreproast"
-cmd = "GetNPUsers.py {domain_name}/ -usersfile {users_file} -no-pass -dc-ip {ip} -outputfile {output_dir}asreproast.hash; [ -s {output_dir}asreproast.hash ] && echo 'TGT FOUND'"
+cmd = """GetNPUsers.py {domain_name}/ -usersfile {users_file} -no-pass -dc-ip {ip} -outputfile {output_dir}asreproast.hash; 
+[ -s {output_dir}asreproast.hash ] && echo 'TGT FOUND'"""
 
   [[asreproast.store_static]]
   asreproast_hashes = "{output_dir}asreproast.hash"
@@ -86,7 +88,7 @@ cmd = "GetNPUsers.py {domain_name}/ -usersfile {users_file} -no-pass -dc-ip {ip}
 
 [extract-links-html]
 name = "extract-links-html"
-cmd = "Y3VybCAtcyAtTCAtayB7dXJsfSB8IGdyZXAgLUV3aG8gIihzcmN8aHJlZilbJ1wiXT9ccypbPTpdXHMqWydcIl0/W14nXCJdW14nXCI+IF0qIiB8IGF3ayAne3tzcGxpdCgkMCxhcnIsLyhocmVmfHNyYylbPTpdW1wiJyddPy8pOyBwcmludCBhcnJbMl19fScgfCBzb3J0IC1mdSB8IGF3ayAne3tpZiAoJDB+L2h0dHAvKSB7e3ByaW50ICQwfX0gZWxzZSB7e3ByaW50ICJ7dXJsfS8iJDB9fX19JyB8IGdyZXAgLUV2ICJcLihwbmd8c3ZnfGpwZ3xqcGVnfGNzcykiIHwgc29ydCAtZnUgPiB7b3V0cHV0X2Rpcn11cmxzLmxzdDsgWyAtcyB7b3V0cHV0X2Rpcn11cmxzLmxzdCBdICYmIGVjaG8gIlVSTFMgRk9VTkQi"
+cmd =  "Y3VybCAtcyAtTCAtayB7dXJsfSBcCnwgZ3JlcCAtRXdobyAiKHNyY3xocmVmKVsnXCJdP1xzKls9Ol1ccypbJ1wiXT9bXidcIj4gXSoiIFwKfCBhd2sgJ3t7c3BsaXQoJDAsYXJyLC8oaHJlZnxzcmMpWz06XVtcIicnXT8vKTsgcHJpbnQgYXJyWzJdfX0nIFwKfCBzb3J0IC1mdSBcCnwgZ3JlcCAtRXYgIlwuKHBuZ3xzdmd8anBnfGpwZWd8Y3NzKSIgXAp8IHNvcnQgLWZ1ID4ge291dHB1dF9kaXJ9dG1wX3VybHMubHN0OyBcCndoaWxlIHJlYWQgLXIgbGluZTsgZG8gXAppZiBbWyAhICRsaW5lID1+IGh0dHAocyk/Oi8vIF1dOyB0aGVuIFwKcHl0aG9uMyAtYyAiZnJvbSB1cmxsaWIucGFyc2UgaW1wb3J0IHVybGpvaW47IHRyeTogcHJpbnQodXJsam9pbigne3VybH0nLCAnJGxpbmUnKSk7IGV4Y2VwdDogcGFzczsiO1wKZWxzZSBcCmVjaG8gJGxpbmU7CmZpO1wKZG9uZSA8IHtvdXRwdXRfZGlyfXRtcF91cmxzLmxzdCA+PiB7b3V0cHV0X2Rpcn11cmxzLmxzdDsgXApbIC1zIHtvdXRwdXRfZGlyfXVybHMubHN0IF0gJiYgZWNobyAiVVJMUyBGT1VORCI="
 base64 = true
 
   [[extract-links-html.store_static]]
@@ -99,12 +101,20 @@ base64 = true
 
 [recon-js-files]
 name = "recon-js-files"
-cmd = "python3 ~/programs/reconjs/reconjs.py -d {output_dir}reconjs -f {urls_file} -o reconjs.lst"
+cmd = "python3 ~/programs/reconjs/reconjs.py -r -d {output_dir}reconjs -u {url}"
 
+  [[recon-js-files.append_array]]
+  "map_file_paths" = "Map file saved at (.*?)$"
+  
   [[recon-js-files.patterns]]
-  "map file found !" = [
+  "Map file saved" = [
     "JS_MAP_FILE_FOUND"
   ]
   "Unminified file found !" = [
     "JS_UNMINIFIED_FILE_FOUND"
   ]
+
+[unsourcemap]
+name = "unsourcemap"
+cmd = '''mkdir -p {output_dir}unsourcemap && outfile_name=`echo "{array_element}" | awk -F/ '{{ print $NF }}' | cut -d. -f1` && python3 /home/layno/programs/reconjs/unwebpack_sourcemap.py --make-directory --local {array_element} {output_dir}unsourcemap/$outfile_name/'''
+iterate_over = "map_file_paths"

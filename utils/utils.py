@@ -10,18 +10,19 @@ async def launch_module(module_name, target):
             fromlist=[module_name]), module_name)
     return module_class(target)
 
-def prepare_conf_string(string, target):
-    return string.format(**target.stored)
+def prepare_conf_string(string, storage):
+    return string.format(**storage)
 
 def get_fields(string):
     """
     Return the fields contained in the given string.
     fields in "{test}" is test ;)
     """
+    print(string)
     return [i[1] for i in Formatter().parse(string) if i[1]]
 
-async def run_cmd(element, target, event_manager, logger):
-    cmd = prepare_conf_string(element['cmd'], target)
+async def run_cmd(element, target, event_manager, logger, storage):
+    cmd = element['cmd']
     logger.info(f"Starting {element['name']}: {cmd}")
     process = await asyncio.create_subprocess_shell(cmd, 
             stdout=asyncio.subprocess.PIPE, 
@@ -32,7 +33,7 @@ async def run_cmd(element, target, event_manager, logger):
         for dictionnary in element['store_static']:
             for key, to_store in dictionnary.items():
                 async with target.lock:
-                    to_store = prepare_conf_string(to_store, target)
+                    to_store = prepare_conf_string(to_store, storage)
                     await event_manager.store(key, to_store)
     while True:
         line = await process.stdout.readline()
@@ -47,6 +48,13 @@ async def run_cmd(element, target, event_manager, logger):
                         if match:
                             async with target.lock:
                                 await event_manager.store(key, match[0])
+            if 'append_array' in element.keys():
+                for dictionnary in element['append_array']:
+                    for key, regex in dictionnary.items():
+                        match = re.findall(regex, line)
+                        if match:
+                            async with target.lock:
+                                await event_manager.append(key, match[0])
             # Check if a pattern launching a new event is detected
             if 'patterns' in element.keys():
                 for dictionnary in element['patterns']:
@@ -88,6 +96,9 @@ def generate_graph(workflow):
 def parse_url(url):
     from urllib.parse import urlparse
     parsed = urlparse(url)
-    domain = parsed.netloc if ':' not in parsed.netloc else parsed.netloc.split(':')[0]
-    top_domain = '.'.join(domain.split('.')[-2:]) if len(domain.split('.')) > 2 else domain
-    return domain, top_domain
+    domain = parsed.hostname
+    top_domain = '.'.join(domain.split('.')[-2:]) if domain.count('.') > 1 else domain
+    base_url = f'{parsed.scheme}://{parsed.netloc}{parsed.path}'
+    if parsed.path == '':
+        base_url = f'{base_url}/'
+    return domain, top_domain, base_url
