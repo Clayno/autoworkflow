@@ -18,7 +18,6 @@ def get_fields(string):
     Return the fields contained in the given string.
     fields in "{test}" is test ;)
     """
-    print(string)
     return [i[1] for i in Formatter().parse(string) if i[1]]
 
 async def run_cmd(element, target, event_manager, logger, storage):
@@ -82,12 +81,17 @@ def generate_graph(workflow):
     }
     edges = set()
     for event, commands in workflow.items():
-        dot.node(event)
+        label = f"""<<TABLE BORDER="0">
+        <TR><TD><B>{event}</B></TD></TR>
+"""
         for command in commands:
+            label += f"    <TR><TD>{command['name']}</TD></TR>"
             for pattern in command.get('patterns', []):
                 for events_to_fire in pattern.values():
                     for event_to_fire in events_to_fire:
                         edges.add((event, event_to_fire))
+        label += "</TABLE>>"
+        dot.node(event, label=label)
     for edge in edges:
         dot.edge(edge[0], edge[1])
     dot.render('output/workflow.gv', view=True)

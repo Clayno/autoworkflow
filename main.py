@@ -37,6 +37,7 @@ if __name__ == "__main__":
     parser.add_argument('-d', '--debug', action='store_true', help='Enable debug output')
     parser.add_argument('-i', '--ip', action='store', help='Target IP')
     parser.add_argument('-u', '--url', action='store', help='Target URL')
+    parser.add_argument('-e', '--env', action='store', help='Environment file to add at start')
     parser.add_argument('-w', '--workflow', action='store', help='Workflow to follow', required=True)
     parser.add_argument('--visualize_graph', action='store_true')
     args = parser.parse_args()
@@ -48,17 +49,19 @@ if __name__ == "__main__":
         level = logging.DEBUG
     setup_logger(level=level)
     logger = AutoWorkflowAdapter()
+    target = Target()
+    if args.env:
+        with open(args.env) as f:
+            target.stored = json.loads(f.read())
     if args.url :
         domain, top_domain, base_url = parse_url(args.url)
         target_id = domain
-        target = Target()
         target.stored['url'] = args.url
         target.stored['domain'] = domain
         target.stored['top_domain'] = top_domain
         target.stored['base_url'] = base_url
     if args.ip:
         target_id = args.ip
-        target = Target()
         target.stored['ip'] = args.ip 
     output_dir = os.path.join(os.getcwd(), 'output', target_id)
     output_dir = os.path.join(output_dir, '')

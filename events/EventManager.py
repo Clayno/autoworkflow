@@ -31,12 +31,12 @@ class EventManager:
         return sub
 
     async def new_event(self, event_name):
-        self.logger.highlight(f'New event: {event_name}') 
         elements = self.workflow.get(event_name, [])
         for element in elements:
             if "run_once" in element and element['run_once'] and element['name'] in self.events:
                 self.logger.debug(f"Command {element['name']} already happened")
             else:
+                self.logger.highlight(f'New event: {event_name}') 
                 sub = await self.launch_command(element)
                 if sub:
                     self.logger.error(f"Not yet the time for {element['name']} - Lacking {sub}")
@@ -51,17 +51,18 @@ class EventManager:
                 self.waiting.remove(element)
 
     async def append(self, array, to_store):
-        self.logger.success(f"Added value to array - {array}: {to_store}")  
         if array not in self.target.stored.keys():
             self.target.stored[array] = []
-        self.target.stored[array].append(to_store)
-        # If we have iterators registered for this array launch commands associated
-        if array in self.iterators.keys():
-            for element in self.iterators[array]:
-                sub = await self.launch_command(element, {'array_element': to_store})
-                if sub:
-                    self.logger.error(f"Not yet the time for {element['name']} - Lacking {sub}")
-                    self.waiting.append(element)
+        if to_store not in self.target.stored[array]:
+            self.target.stored[array].append(to_store)
+            self.logger.success(f"Added value to array - {array}: {to_store}")  
+            # If we have iterators registered for this array launch commands associated
+            if array in self.iterators.keys():
+                for element in self.iterators[array]:
+                    sub = await self.launch_command(element, {'array_element': to_store})
+                    if sub:
+                        self.logger.error(f"Not yet the time for {element['name']} - Lacking {sub}")
+                        self.waiting.append(element)
 
     def load_conf(self, workflow):
         self.logger.info(f"Loading workflow {self.workflow}")

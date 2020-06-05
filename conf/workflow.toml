@@ -2,26 +2,25 @@
 name = "nmap"
 run_once = true
 
-[[SMB_SERVICE_FOUND]]
+[["SMB SERVICE FOUND"]]
 name = "smbclient-anonymous"
 run_once = true
 
-[[LDAP_SERVICE_FOUND]]
+[["LDAP SERVICE FOUND"]]
 name = "ldap-base"
 
-[[LDAP_DOMAIN_CONTROLLER]]
+[["TARGET IS A DOMAIN CONTROLLER"]]
 name = "ldap-anonymous-dc"
+run_once = true
 
-[[RPC_SERVICE_FOUND]]
+[["LDAP ANONYMOUS ACCESS TO DC"]]
+name = "extract-ldap-users"
+
+[["RPC SERVICE FOUND"]]
 name = "rpc-anonymous"
 run_once = true
 
-[[RPC_ACCESS]]
+[["RPC ANONYMOUS ACCESS"]]
 name = "rpc-list-users"
 run_once = true
 
-[[RPC_USER_LIST]]
-name = "hydra-nsr-spraying"
-
-[[RPC_USER_LIST]]
-name = "asreproast"

@@ -1,0 +1,48 @@
+[[START]]
+name = "nmap"
+run_once = true
+
+[[START]]
+name = "kerbrute-userenum"
+run_once = true
+
+[["SMB SERVICE FOUND"]]
+name = "smbclient-anonymous"
+run_once = true
+
+[["LDAP SERVICE FOUND"]]
+name = "ldap-base"
+
+[["TARGET IS A DOMAIN CONTROLLER"]]
+name = "ldap-anonymous-dc"
+run_once = true
+
+[["LDAP ANONYMOUS ACCESS TO DC"]]
+name = "extract-ldap-users"
+
+[["RPC SERVICE FOUND"]]
+name = "rpc-anonymous"
+run_once = true
+
+[["RPC ANONYMOUS ACCESS ALLOWED"]]
+name = "rpc-list-users"
+run_once = true
+
+[["VALID USERNAME FOUND"]]
+name = "kerbrute-test-user-as-pass"
+
+[["VALID USERNAME FOUND"]]
+name = "asreproast"
+
+[["VALID CREDENTIALS FOUND"]]
+name = "bloodhound-gather-info"
+run_once = true
+
+[["VALID CREDENTIALS FOUND"]]
+name = "bloodhound-add-owned-users"
+
+[["VALID CREDENTIALS FOUND"]]
+name = "kerberoast"
+
+[["OWNED USERS ADDED"]]
+name = "bloodhound-check-shortest-path"
