@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import os
+import sys
 import json
 import argparse
 from utils.logger import setup_logger, AutoWorkflowAdapter
@@ -18,18 +19,24 @@ class Target:
         return json.dumps(self.stored, sort_keys=True, indent=4)
 
 async def start(target, logger, workflow):
+    print()
+    logger.display_bar = True
+    workaround = 0  
     event_manager = EventManager(target, logger, workflow)
     await event_manager.new_event("START")
     while True:
-        await asyncio.sleep(1)
-        if event_manager.tasks:
-            logger.info(f"Number of tasks: {len(event_manager.tasks)}")
-            await asyncio.gather(*event_manager.tasks)
+        await asyncio.sleep(5)
+        if event_manager.tasks or event_manager.listeners:
+            workaround = 0
+            to_await = event_manager.tasks + event_manager.listeners
+            await asyncio.gather(*to_await)
             async with event_manager.lock:
                 event_manager.tasks = []
         else:
-            break
-    logger.success(f"{target}")
+            workaround +=1
+            if workaround == 3:
+                break
+    logger.display_bar = False
     logger.info("Done")
 
 if __name__ == "__main__":
@@ -71,4 +78,10 @@ if __name__ == "__main__":
     except FileExistsError:
         logger.debug("Directory already exists")
     logger.info(f"Output dir: {output_dir}")
-    asyncio.run(start(target, logger, args.workflow))
+    try:
+        asyncio.run(start(target, logger, args.workflow))
+    except KeyboardInterrupt:
+        logger.info("User interrupted")
+    finally:
+        logger.success(f"{target}")
+

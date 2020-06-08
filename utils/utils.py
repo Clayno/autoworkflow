@@ -1,4 +1,5 @@
 import asyncio
+import aiofiles
 import logging
 import json
 import re
@@ -22,7 +23,8 @@ def get_fields(string):
 
 async def run_cmd(element, target, event_manager, logger, storage):
     cmd = element['cmd']
-    logger.info(f"Starting {element['name']}: {cmd}")
+    logger.info(f"Starting {element['name']}")
+    logger.debug(f"{cmd}")
     process = await asyncio.create_subprocess_shell(cmd, 
             stdout=asyncio.subprocess.PIPE, 
             stderr=asyncio.subprocess.STDOUT, 
@@ -31,15 +33,16 @@ async def run_cmd(element, target, event_manager, logger, storage):
     if 'store_static' in element.keys():
         for dictionnary in element['store_static']:
             for key, to_store in dictionnary.items():
-                async with target.lock:
-                    to_store = prepare_conf_string(to_store, storage)
-                    await event_manager.store(key, to_store)
+                to_store = prepare_conf_string(to_store, storage)
+                if target.stored.get(key, None) != to_store:
+                    async with target.lock:
+                        await event_manager.store(key, to_store)
     while True:
         line = await process.stdout.readline()
         if line:
             line = str(line.rstrip(), 'utf8', 'ignore')
             logger.debug(line)
-            # Check if a regex match meaning we have to store something
+            # Check if a regex matches meaning we have to store something
             if 'store' in element.keys():
                 for dictionnary in element['store']:
                     for key, regex in dictionnary.items():
@@ -66,9 +69,53 @@ async def run_cmd(element, target, event_manager, logger, storage):
             break
     await process.wait()
     logger.info(f"Ending {element['name']}")
+    logger.nb_tasks = len([t for t in event_manager.tasks if not t.cancelled() and not t.done()])
+    
+
+async def listen(listener, target, event_manager, logger, storage):
+    logger.info(f"Starting {listener['name']}")
+    # Add all static variables configured
+    if 'store_static' in listener.keys():
+        for dictionnary in listener['store_static']:
+            for key, to_store in dictionnary.items():
+                to_store = prepare_conf_string(to_store, storage)
+                if target.stored.get(key, None) != to_store:
+                    async with target.lock:
+                        await event_manager.store(key, to_store)
+    async with aiofiles.open(listener['file']) as f:
+        while True:
+            line = await f.readline()
+            if line:
+                logger.debug(line)
+                # Check if a regex matches meaning we have to store something
+                if 'store' in listener.keys():
+                    for dictionnary in listener['store']:
+                        for key, regex in dictionnary.items():
+                            match = re.findall(regex, line)
+                            if match:
+                                async with target.lock:
+                                    await event_manager.store(key, match[0])
+                if 'append_array' in listener.keys():
+                    for dictionnary in listener['append_array']:
+                        for key, regex in dictionnary.items():
+                            match = re.findall(regex, line)
+                            if match:
+                                async with target.lock:
+                                    await event_manager.append(key, match[0])
+                # Check if a pattern launching a new event is detected
+                if 'patterns' in listener.keys():
+                    for dictionnary in listener['patterns']:
+                        for pattern, events in dictionnary.items():
+                            matches = re.findall(pattern, line)
+                            if matches:
+                                for event in events:
+                                    await event_manager.new_event(event)
+            else:
+                await asyncio.sleep(5)
+    logger.info(f"Ending {listener['name']}")
+
 
 def generate_graph(workflow):
-    import json
     from graphviz import Digraph
     dot = Digraph(comment='Workflow', format='png')
     workflow = toml.load(f"conf/{workflow}.toml")

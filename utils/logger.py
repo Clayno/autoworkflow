@@ -22,30 +22,77 @@ logging.FileHandler.emit = antiansi_emit
 ####################################################################
 
 class AutoWorkflowAdapter(logging.LoggerAdapter):
+    nb_tasks = 0
+    display_bar = False
 
     def __init__(self, logger_name='autoworkflow'):
         self.logger = logging.getLogger(logger_name)
 
     def info(self, msg, *args, **kwargs):
+        if self.display_bar:
+            sys.stdout.write('\033[F')
+            sys.stdout.write('\033[K')
         msg = u'{} {}'.format(colored("[*]", 'blue', attrs=['bold']), msg)
         self.logger.info(msg, *args, **kwargs)
+        if self.display_bar:
+            sys.stdout.flush()
+            self.bar()
 
     def error(self, msg, *args, **kwargs):
+        if self.display_bar:
+            sys.stdout.write('\033[F')
+            sys.stdout.write('\033[K')
         msg = u'{} {}'.format(colored("[x]", 'red', attrs=['bold']), msg)
         self.logger.error(msg, *args, **kwargs)
+        if self.display_bar:
+            sys.stdout.flush()
+            self.bar()
 
     def debug(self, msg, *args, **kwargs):
+        if self.display_bar:
+            sys.stdout.write('\033[F')
+            sys.stdout.write('\033[K')
         msg = u'{} {}'.format(colored("[d]", 'green'), msg)
         self.logger.debug(msg, *args, **kwargs)
+        if self.display_bar:
+            sys.stdout.flush()
+            self.bar()
 
     def success(self, msg, *args, **kwargs):
+        if self.display_bar:
+            sys.stdout.write('\033[F')
+            sys.stdout.write('\033[K')
         msg = u'{} {}'.format(colored("[+]", 'green', attrs=['bold']), msg)
         self.logger.info(msg, *args, **kwargs)
+        if self.display_bar:
+            sys.stdout.flush()
+            self.bar()
 
-    def highlight(self, msg, *args, **kwargs):
-        msg = u'{}'.format(colored(msg, 'yellow', attrs=['bold']))
+    def added(self, msg, value, *args, **kwargs):
+        if self.display_bar:
+            sys.stdout.write('\033[F')
+            sys.stdout.write('\033[K')
+        msg = u'{} {} {}'.format(colored("[+]", 'green', attrs=['bold']), msg, 
+                colored(value, 'white', attrs=['bold']))
         self.logger.info(msg, *args, **kwargs)
+        if self.display_bar:
+            sys.stdout.flush()
+            self.bar()
 
+
+    def event(self, msg, *args, **kwargs):
+        if self.display_bar:
+            sys.stdout.write('\033[F')
+            sys.stdout.write('\033[K')
+        msg = u'{} New event: {}'.format(colored("[!]", 'yellow', attrs=['bold']), 
+                colored(msg, 'yellow', attrs=['bold']))
+        self.logger.info(msg, *args, **kwargs)
+        if self.display_bar:
+            sys.stdout.flush()
+            self.bar()
+    
+    def bar(self):
+        print(colored(f"Tasks: {self.nb_tasks}", 'white', 'on_grey'))
 
 def setup_debug_logger():
     debug_output_string = "{} %(message)s".format(colored('DEBUG', 'magenta', attrs=['bold']))

@@ -35,6 +35,10 @@ name = "kerbrute-test-user-as-pass"
 name = "asreproast"
 
 [["VALID CREDENTIALS FOUND"]]
+name = "first-valid-creds"
+run_once = true
+
+[["VALID CREDENTIALS FOUND"]]
 name = "bloodhound-gather-info"
 run_once = true
 

