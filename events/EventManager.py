@@ -54,11 +54,10 @@ class EventManager:
                 self.waiting.remove(element)
 
     async def append(self, array, to_store):
-        if array == "usernames":
-            to_store = to_store.upper()
         if array not in self.target.stored.keys():
-            self.target.stored[array] = []
-        if to_store not in self.target.stored[array]:
+            self.target.stored[array] = [] 
+        test = to_store.upper() if isinstance(to_store, str) else to_store
+        if test not in [e.upper() if isinstance(e, str) else e for e in self.target.stored[array]]:
             self.target.stored[array].append(to_store)
             self.logger.added(f"Added value to array - {array}:", to_store)  
             # If we have iterators registered for this array launch commands associated

@@ -64,8 +64,7 @@ cmd = """
 cat {output_dir}ldap-anonymous-dc.txt \
 | grep -A 30 "objectClass: user" \
 | grep "sAMAccountName:" \
-| cut -d" " -f2 \
-| tr '[a-z]' '[A-Z]' > {output_dir}ldap_users.lst;
+| cut -d" " -f2 > {output_dir}ldap_users.lst;
 cat {output_dir}ldap_users.lst;
 [ -s {output_dir}ldap_users.lst ] \
 && echo '###USERS FOUND'"""
@@ -91,8 +90,7 @@ cmd = "rpcclient -U ''%'' {ip} -c 'AZERTY;quit' 2>/dev/null"
 name = "rpc-list-users"
 cmd = """rpcclient -U ''%'' {ip} -c 'enumdomusers;quit' 2>/dev/null \
 | cut -d[ -f2 \
-| cut -d] -f1 \
-| tr '[a-z]' '[A-Z]' > {output_dir}rpc_users.lst;
+| cut -d] -f1  > {output_dir}rpc_users.lst;
 cat {output_dir}rpc_users.lst;
 [ -s {output_dir}rpc_users.lst ] \
 && grep -vq 'result was' {output_dir}rpc_users.lst \
@@ -251,7 +249,7 @@ cmd = "python3 ~/programs/bloodhound/check_path_to_da.py -u $(echo '{array_eleme
 iterate_over = "credentials"
 
   [[bloodhound-check-shortest-path.patterns]]
-  "\[\+\] Path to DA found for user " = [
+  'Path to DA found for user'  = [
     "PATH TO DA FOUND"
   ]
 
