@@ -4,6 +4,7 @@ import logging
 import json
 import re
 import toml
+import os
 from string import Formatter
 
 async def launch_module(module_name, target):
@@ -118,8 +119,8 @@ async def listen(listener, target, event_manager, logger, storage):
 def generate_graph(workflow):
     from graphviz import Digraph
     dot = Digraph(comment='Workflow', format='png')
-    workflow = toml.load(f"conf/{workflow}.toml")
-    commands = toml.load("conf/commands.toml")
+    workflow = toml.load(os.path.join(os.path.dirname(__file__), f"../conf/{workflow}.toml"))
+    commands = toml.load(os.path.join(os.path.dirname(__file__), "../conf/commands.toml"))
     workflow = {
         event: [
             {**commands[cmd['name']], **cmd} for cmd in cmds

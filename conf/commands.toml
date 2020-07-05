@@ -1,6 +1,6 @@
 [nmap]
 name = "nmap"
-cmd = "nmap -v -Pn {ip}"
+cmd = "nmap -v -sVC -oA {output_dir}nmap -Pn {ip}"
 
   [[nmap.patterns]]
   "Discovered open port (445|139)" = [
@@ -97,7 +97,7 @@ cat {output_dir}rpc_users.lst;
 && echo 'USERS FOUND'"""
 
   [[rpc-list-users.append_array]]
-  usernames = "^(?!USERS FOUND|RESULT WAS NT_STATUS_ACCESS_DENIED)(.*)$" 
+  usernames = "^(?!USERS FOUND|RESULT WAS NT_STATUS_ACCESS_DENIED|result was NT_STATUS_ACCESS_DENIED)(.*)$" 
 
   [[rpc-list-users.patterns]]
   "USERS FOUND" = [

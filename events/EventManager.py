@@ -1,4 +1,5 @@
 import asyncio
+import aiofiles
 import logging
 import toml
 import os
@@ -31,6 +32,8 @@ class EventManager:
                 prepared['cmd'] = prepare_conf_string(prepared['cmd'], storage)
                 self.tasks.append(asyncio.create_task(run_cmd(prepared, self.target, self, self.logger, storage)))
                 self.logger.nb_tasks = len([t for t in self.tasks if not t.cancelled() and not t.done()])
+                async with aiofiles.open(os.path.join(self.target.stored['output_dir'], 'commands.txt'), mode='a') as f:
+                    await f.write(f"{prepared['cmd']}\n\n")
         return sub
 
     async def new_event(self, event_name):
@@ -80,8 +83,8 @@ class EventManager:
 
     def load_conf(self, workflow):
         self.logger.info(f"Loading workflow {self.workflow}")
-        workflow = toml.load(f"conf/{workflow}.toml")
-        commands = toml.load(f"conf/commands.toml")
+        workflow = toml.load(os.path.join(os.path.dirname(__file__), f"../conf/{workflow}.toml"))
+        commands = toml.load(os.path.join(os.path.dirname(__file__), f"../conf/commands.toml"))
         for key, command in commands.items():
             base64 = command.get("base64", False)
             listener = command.get("listener", False)
