@@ -25,7 +25,7 @@ def get_fields(string):
 async def run_cmd(element, target, event_manager, logger, storage):
     cmd = element['cmd']
     logger.info(f"Starting {element['name']}")
-    logger.debug(f"{cmd}")
+    logger.debug(f"{element['name']} cmd: {cmd}")
     process = await asyncio.create_subprocess_shell(cmd, 
             stdout=asyncio.subprocess.PIPE, 
             stderr=asyncio.subprocess.STDOUT, 
@@ -34,6 +34,7 @@ async def run_cmd(element, target, event_manager, logger, storage):
     if 'store_static' in element.keys():
         for dictionnary in element['store_static']:
             for key, to_store in dictionnary.items():
+                logger.debug(f"{element['name']} store static: {key}:{to_store}")
                 to_store = prepare_conf_string(to_store, storage)
                 if target.stored.get(key, None) != to_store:
                     async with target.lock:

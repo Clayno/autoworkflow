@@ -31,7 +31,7 @@ class EventManager:
                 prepared = element.copy()
                 prepared['cmd'] = prepare_conf_string(prepared['cmd'], storage)
                 self.tasks.append(asyncio.create_task(run_cmd(prepared, self.target, self, self.logger, storage)))
-                self.logger.nb_tasks = len([t for t in self.tasks if not t.cancelled() and not t.done()])
+                self.logger.nb_tasks = len([t for t in self.tasks if not t.cancelled() and not t.done()])               
                 async with aiofiles.open(os.path.join(self.target.stored['output_dir'], 'commands.txt'), mode='a') as f:
                     await f.write(f"{prepared['cmd']}\n\n")
         return sub
@@ -80,6 +80,7 @@ class EventManager:
                 os.utime(prepared['file'], None)
         async with self.lock:
             self.listeners.append(asyncio.create_task(listen(prepared, self.target, self, self.logger, storage)))
+        self.logger.nb_listeners = len(self.listeners)
 
     def load_conf(self, workflow):
         self.logger.info(f"Loading workflow {self.workflow}")

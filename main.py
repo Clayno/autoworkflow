@@ -21,21 +21,26 @@ class Target:
 async def start(target, logger, workflow):
     print()
     logger.display_bar = True
-    workaround = 0  
-    event_manager = EventManager(target, logger, workflow)
-    await event_manager.new_event("START")
-    while True:
-        await asyncio.sleep(5)
-        if event_manager.tasks or event_manager.listeners:
-            workaround = 0
-            to_await = event_manager.tasks + event_manager.listeners
-            await asyncio.gather(*to_await)
-            async with event_manager.lock:
-                event_manager.tasks = []
-        else:
-            workaround +=1
-            if workaround == 3:
-                break
+    #workaround = 0
+    try:
+        event_manager = EventManager(target, logger, workflow)
+        await event_manager.new_event("START")
+        while True:
+            await asyncio.sleep(5)
+            if event_manager.tasks or event_manager.listeners:
+                workaround = 0
+                to_await = event_manager.tasks + event_manager.listeners
+                #await asyncio.gather(*to_await)
+                async with event_manager.lock:
+                    event_manager.tasks = []
+            #else:
+            #    workaround +=1
+            #    if workaround == 3:
+            #        break
+    except:
+        tasks = [task for task in asyncio.all_tasks() if task is not
+             asyncio.current_task()]
+        list(map(lambda task: task.cancel(), tasks))
     logger.display_bar = False
     logger.info("Done")
 
@@ -79,7 +84,7 @@ if __name__ == "__main__":
         logger.debug("Directory already exists")
     logger.info(f"Output dir: {output_dir}")
     try:
-        asyncio.run(start(target, logger, args.workflow))
+        asyncio.run(start(target, logger, args.workflow), debug=0)
     except KeyboardInterrupt:
         logger.info("User interrupted")
     finally:

@@ -1,6 +1,7 @@
 import logging
 import sys
 import re
+import asyncio
 from termcolor import colored
 from datetime import datetime
 
@@ -23,6 +24,7 @@ logging.FileHandler.emit = antiansi_emit
 
 class AutoWorkflowAdapter(logging.LoggerAdapter):
     nb_tasks = 0
+    nb_listeners = 0
     display_bar = False
 
     def __init__(self, logger_name='autoworkflow'):
@@ -92,7 +94,7 @@ class AutoWorkflowAdapter(logging.LoggerAdapter):
             self.bar()
     
     def bar(self):
-        print(colored(f"Tasks: {self.nb_tasks}", 'white', 'on_grey'))
+        print(colored(f"Tasks: {self.nb_tasks}    Listeners: {self.nb_listeners}    Loop: {len(asyncio.all_tasks())}", 'white', 'on_grey'))
 
 def setup_debug_logger():
     debug_output_string = "{} %(message)s".format(colored('DEBUG', 'magenta', attrs=['bold']))

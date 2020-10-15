@@ -30,6 +30,7 @@ run_once = true
 
 [["VALID USERNAME FOUND"]]
 name = "kerbrute-test-user-as-pass"
+run_once = true
 
 [["VALID USERNAME FOUND"]]
 name = "asreproast"

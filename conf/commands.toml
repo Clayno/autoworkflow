@@ -211,7 +211,7 @@ cmd = '''python3 -c "a={credentials}; u,p=a[0].split(':'); print(f'USERNAME: {{u
 
 [bloodhound-gather-info]
 name = "bloodhound-gather-info"
-cmd = "cd {output_dir}; mkdir -p bloodhound; cd bloodhound; bloodhound-python -u {user_default} -p {password_default} -d {domain_name} -dc {dc_dns} -ns {ip} -c all"
+cmd = "cd {output_dir}; mkdir -p bloodhound; cd bloodhound; docker run --rm -it -v ${{PWD}}:/bloodhound-data --user $(id -u):$(id -g) clayno/bloodhound-python -u {user_default} -p {password_default} -d {domain_name} -dc {dc_dns} -ns {ip} -c all"
 run_once = true
 
   [[bloodhound-gather-info.store]]
@@ -226,7 +226,7 @@ run_once = true
 name = "bloodhound-add-owned-users"
 cmd = """python3 -c "a={credentials}; print('\\n'.join(a))" | cut -d'@' -f1  > {output_dir}owned_users.lst \
 && sort -u {output_dir}owned_users.lst -f {output_dir}owned_users.lst;
-python3 ~/programs/bloodhound/mark_as_owned.py -l {output_dir}owned_users.lst -d {domain_name};"""
+python3 ~/programs/bloodhound/bloodhound_manager.py set user-owned -l {output_dir}owned_users.lst -d {domain_name};"""
 iterate_over = "credentials"
 
   [[bloodhound-add-owned-users.patterns]]
@@ -252,6 +252,11 @@ iterate_over = "credentials"
   'Path to DA found for user'  = [
     "PATH TO DA FOUND"
   ]
+
+[bloodhound-import]
+name = "bloodhound-import"
+cmd = "bloodhound-import -du neo4j -dp Bloodhound {output_dir}/bloodhound/*.json"
+
 
 [manual-user-add]
 name = "manual-user-add"
