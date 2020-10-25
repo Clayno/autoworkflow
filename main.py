@@ -9,6 +9,7 @@ import argparse
 from utils.logger import setup_logger, AutoWorkflowAdapter
 from utils.utils import generate_graph, parse_url
 from events.EventManager import EventManager
+import traceback
 
 class Target:
     def __init__(self):
@@ -41,6 +42,7 @@ async def start(target, logger, workflow):
         tasks = [task for task in asyncio.all_tasks() if task is not
              asyncio.current_task()]
         list(map(lambda task: task.cancel(), tasks))
+        traceback.print_exc()
     logger.display_bar = False
     logger.info("Done")
 
@@ -51,9 +53,9 @@ if __name__ == "__main__":
     parser.add_argument('-u', '--url', action='store', help='Target URL')
     parser.add_argument('-e', '--env', action='store', help='Environment file to add at start')
     parser.add_argument('-w', '--workflow', action='store', help='Workflow to follow', required=True)
-    parser.add_argument('--visualize_graph', action='store_true')
+    parser.add_argument('--visualize', action='store_true')
     args = parser.parse_args()
-    if args.visualize_graph:
+    if args.visualize:
         generate_graph(args.workflow)
         exit(0)
     level = logging.INFO

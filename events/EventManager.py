@@ -85,27 +85,24 @@ class EventManager:
     def load_conf(self, workflow):
         self.logger.info(f"Loading workflow {self.workflow}")
         workflow = toml.load(os.path.join(os.path.dirname(__file__), f"../conf/{workflow}.toml"))
-        commands = toml.load(os.path.join(os.path.dirname(__file__), f"../conf/commands.toml"))
-        for key, command in commands.items():
-            base64 = command.get("base64", False)
-            listener = command.get("listener", False)
-            if base64:
-                commands[key]['cmd'] = b64decode(command['cmd']).decode('utf-8')
-            if listener:
-                loop = asyncio.get_event_loop()
-                loop.create_task(self.start_listener(commands[key]))
-            # In case we have a command iterating over an array
-            if 'iterate_over' in command.keys():
-                arr =  command['iterate_over'] 
-                if arr not in self.iterators.keys():
-                    self.iterators[arr] = []
-                # Adding the command name to the "iterators" launched everytime an item is added to the array
-                self.iterators[arr].append(commands[key])
-                self.logger.debug(f"Adding iterator {commands[key]} for {arr}")
-                pass
-        self.workflow = {
-                event: [
-                    {**commands[cmd['name']], **cmd} for cmd in cmds
-                    ]
-                for event, cmds in workflow.items()
-                }
+        self.workflow = dict()
+        for event, content in workflow.items():
+            if event == "LISTENERS":
+                for element in content:
+                    loop = asyncio.get_event_loop()
+                    loop.create_task(self.start_listener(element))
+            else:
+                self.workflow[event] = []
+                for element in content:
+                    # In case we have a command iterating over an array
+                    if 'iterate_over' in element.keys():
+                        arr =  element['iterate_over'] 
+                        if arr not in self.iterators.keys():
+                            self.iterators[arr] = []
+                        # Adding the command name to the "iterators" launched everytime an item is added to the array
+                        self.iterators[arr].append(element)
+                        self.logger.debug(f"Adding iterator {element['name']} for {arr}")
+                        pass
+                    else:
+                        self.workflow[event].append(element)
+

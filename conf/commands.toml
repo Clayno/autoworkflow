@@ -215,7 +215,7 @@ cmd = "cd {output_dir}; mkdir -p bloodhound; cd bloodhound; docker run --rm -it 
 run_once = true
 
   [[bloodhound-gather-info.store]]
-  bloodhound_gathered = "INFO: Done"
+  bloodhound_gathered = true
 
   [[bloodhound-gather-info.patterns]]
   "INFO: Done" = [

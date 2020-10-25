@@ -106,6 +106,7 @@ async def listen(listener, target, event_manager, logger, storage):
                                     await event_manager.append(key, match[0])
                 # Check if a pattern launching a new event is detected
                 if 'patterns' in listener.keys():
+                    logger.debug('pattern')
                     for dictionnary in listener['patterns']:
                         for pattern, events in dictionnary.items():
                             matches = re.findall(pattern, line)
@@ -121,13 +122,6 @@ def generate_graph(workflow):
     from graphviz import Digraph
     dot = Digraph(comment='Workflow', format='png')
     workflow = toml.load(os.path.join(os.path.dirname(__file__), f"../conf/{workflow}.toml"))
-    commands = toml.load(os.path.join(os.path.dirname(__file__), "../conf/commands.toml"))
-    workflow = {
-        event: [
-            {**commands[cmd['name']], **cmd} for cmd in cmds
-        ]
-        for event, cmds in workflow.items()
-    }
     edges = set()
     for event, commands in workflow.items():
         label = f"""<<TABLE BORDER="0">
