@@ -1,4 +1,4 @@
 toml
 graphviz
-termcolor
 aiofiles
+rich

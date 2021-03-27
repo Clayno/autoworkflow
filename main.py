@@ -6,7 +6,8 @@ import os
 import sys
 import json
 import argparse
-from utils.logger import setup_logger, AutoWorkflowAdapter
+from rich.console import Console
+from utils.logger import AutoWorkflowAdapter
 from utils.utils import generate_graph, parse_url
 from events.EventManager import EventManager
 import traceback
@@ -19,10 +20,8 @@ class Target:
     def __repr__(self):
         return json.dumps(self.stored, sort_keys=True, indent=4)
 
-async def start(target, logger, workflow):
-    print()
-    logger.display_bar = True
-    #workaround = 0
+async def start(target, logger, workflow, status):
+    logger.status = status
     try:
         event_manager = EventManager(target, logger, workflow)
         await event_manager.new_event("START")
@@ -39,12 +38,30 @@ async def start(target, logger, workflow):
             #    if workaround == 3:
             #        break
     except:
+        status.stop()
         tasks = [task for task in asyncio.all_tasks() if task is not
              asyncio.current_task()]
         list(map(lambda task: task.cancel(), tasks))
-        traceback.print_exc()
-    logger.display_bar = False
+#        traceback.print_exc()
+    status.stop()
     logger.info("Done")
+
+
+def setup_console():
+    console = rich.get_console()
+    layout = Layout(name="Autoworkflow")
+
+    layout.split(
+        Layout(name="main", ratio=1),
+        Layout(name="footer", size=7),
+    )
+    layout["main"].split(
+        Layout(name="side"),
+        Layout(name="body", ratio=2, minimum_size=60),
+        direction="horizontal",
+    )
+    return layout
+
 
 if __name__ == "__main__":
     parser  = argparse.ArgumentParser(description="AutoWorkflow - Automate tools chaining as part of a workflow")
@@ -61,8 +78,8 @@ if __name__ == "__main__":
     level = logging.INFO
     if args.debug:
         level = logging.DEBUG
-    setup_logger(level=level)
-    logger = AutoWorkflowAdapter()
+    console = Console()
+    logger = AutoWorkflowAdapter(console, level=level)
     target = Target()
     if args.env:
         with open(args.env) as f:
@@ -86,7 +103,8 @@ if __name__ == "__main__":
         logger.debug("Directory already exists")
     logger.info(f"Output dir: {output_dir}")
     try:
-        asyncio.run(start(target, logger, args.workflow), debug=0)
+        with console.status("Starting....") as status:
+            asyncio.run(start(target, logger, args.workflow, status), debug=0)
     except KeyboardInterrupt:
         logger.info("User interrupted")
     finally:

@@ -1,9 +1,0 @@
-[[START]]
-name = "nmap"
-run_once = true
-
-[["SMB SERVICE FOUND"]]
-name = "smbghost-scanner"
-
-[["HTTP SERVICE FOUND"]]
-name = "ghostcat-scanner"

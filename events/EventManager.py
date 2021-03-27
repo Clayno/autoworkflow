@@ -3,6 +3,7 @@ import aiofiles
 import logging
 import toml
 import os
+import rich
 from base64 import b64decode
 from utils.utils import run_cmd, get_fields, prepare_conf_string, listen
 
@@ -33,7 +34,7 @@ class EventManager:
                 self.tasks.append(asyncio.create_task(run_cmd(prepared, self.target, self, self.logger, storage)))
                 self.logger.nb_tasks = len([t for t in self.tasks if not t.cancelled() and not t.done()])               
                 async with aiofiles.open(os.path.join(self.target.stored['output_dir'], 'commands.txt'), mode='a') as f:
-                    await f.write(f"{prepared['cmd']}\n\n")
+                    await f.write(f"{prepared['cmd']}\n{'-'*80}\n")
         return sub
 
     async def new_event(self, event_name):

@@ -1,11 +1,19 @@
 import logging
 import sys
-import re
-import asyncio
-import rich
-from rich.logging import RichHandler
-from termcolor import colored
 from datetime import datetime
+from rich import box
+from rich.logging import RichHandler
+from rich.live import Live
+from rich.align import Align
+from rich.console import Console, RenderGroup
+from rich.layout import Layout
+from rich.panel import Panel
+from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn
+from rich.syntax import Syntax
+from rich.table import Table
+from rich.text import Text
+from time import sleep
+from termcolor import colored
 
 class AutoWorkflowAdapter(logging.LoggerAdapter):
     nb_tasks = 0
@@ -49,7 +57,6 @@ class AutoWorkflowAdapter(logging.LoggerAdapter):
         self.logger.info(msg, extra={"markup": True}, *args, **kwargs)
         self.bar()
 
-
     def event(self, msg, *args, **kwargs):
         msg = u'[yellow]{}[/] New event: [bold yellow]{}[/]'.format("[!]", msg)
         self.logger.info(msg, extra={"markup": True}, *args, **kwargs)
@@ -59,37 +66,17 @@ class AutoWorkflowAdapter(logging.LoggerAdapter):
         if self.status:
             self.status.update(f"[green]Tasks: {self.nb_tasks}    Listeners: {self.nb_listeners}    Loop: {len(asyncio.all_tasks())}[/]")
 
-def setup_debug_logger():
-    debug_output_string = "{} %(message)s".format(colored('DEBUG', 'magenta', attrs=['bold']))
-    formatter = logging.Formatter(debug_output_string)
-    streamHandler = logging.StreamHandler(sys.stdout)
-    streamHandler.setFormatter(formatter)
-
-    root_logger = logging.getLogger()
-    root_logger.propagate = False
-    root_logger.addHandler(streamHandler)
-    #root_logger.addHandler(fileHandler)
-    root_logger.setLevel(logging.DEBUG)
-    return root_logger
 
 def setup_logger(level=logging.INFO, log_to_file=False, log_prefix=None, logger_name='autoworkflow'):
 
     formatter = logging.Formatter("%(message)s")
 
-    if log_to_file:
-        if not log_prefix:
-            log_prefix = 'log'
-
-        log_filename = '{}_{}.log'.format(log_prefix.replace('/', '_'), datetime.now().strftime('%Y-%m-%d'))
-        fileHandler = logging.FileHandler('./logs/{}'.format(log_filename))
-        fileHandler.setFormatter(formatter)
-
     streamHandler = logging.StreamHandler(sys.stdout)
     streamHandler.setFormatter(formatter)
 
-    logger = logging.getLogger(logger_name)
+    logger = logging.getLogger("rich")
     logger.propagate = False
-    logger.addHandler(streamHandler)
+#    logger.addHandler(RichHandler)
 
     if log_to_file:
         logger.addHandler(fileHandler)
@@ -97,3 +84,49 @@ def setup_logger(level=logging.INFO, log_to_file=False, log_prefix=None, logger_
     logger.setLevel(level)
 
     return logger
+
+
+
+
+def setup_console():
+    layout = Layout(name="Autoworkflow")
+    layout.split(
+        Layout(name="main", ratio=1),
+    )
+    layout["main"].split(
+        Layout(name="side"),
+        Layout(name="body", ratio=2, minimum_size=60),
+            direction="horizontal",
+    )
+    return layout
+
+
+#logger = setup_logger()
+#FORMAT = "%(message)s"
+#logging.basicConfig(
+#    level="INFO", format=FORMAT, datefmt="[%X]", handlers=[AutoWorkflowAdapter(console=console)]
+#)
+console = Console()
+layout = setup_console()
+#layout.get("body").update(Panel(""))
+tasks = 1
+with Live(layout, console=console) as live:
+    logger = AutoWorkflowAdapter(live.console)
+    while True:
+        tasks += 1
+        logger.added("ok", "test")
+        sleep(1)
+
+
+
+#layout = setup_console()
+#output = Text("Starting...")
+#layout.get("body").update(Panel(
+#    output,
+#    title="Output"
+#    ))
+#with Live(layout, refresh_per_second=10, screen=True) as live:
+#    while True:
+#        output.append('ok\n')
+#        #console.print('ok')
+#        sleep(1)

