@@ -2,3 +2,5 @@ toml
 graphviz
 aiofiles
 rich
+termcolor
+neo4j

