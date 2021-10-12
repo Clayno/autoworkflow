@@ -76,11 +76,11 @@ async def run_cmd(event_action, target, event_manager, logger, storage):
                         if dict_to_build != {}:
                             async with target.lock:
                                 await event_manager.append(info_key, dict_to_build)
-            # Check if a pattern launching a new event is detected
+            # Check if a trigger launching a new event is detected
             if 'events' in event_action:
-                for patterns in event_action['events']:
-                    for pattern, events in patterns.items():
-                        matches = re.findall(pattern, line)
+                for triggers in event_action['events']:
+                    for trigger, events in triggers.items():
+                        matches = re.findall(trigger, line)
                         if matches:
                             for event in events:
                                 await event_manager.new_event(event)
@@ -123,12 +123,12 @@ async def listen(listener, target, event_manager, logger, storage):
                             if match:
                                 async with target.lock:
                                     await event_manager.append(key, match[0])
-                # Check if a pattern launching a new event is detected
+                # Check if a trigger launching a new event is detected
                 if 'events' in listener.keys():
                     logger.debug('events')
                     for dictionary in listener['events']:
-                        for pattern, events in dictionary.items():
-                            matches = re.findall(pattern, line)
+                        for trigger, events in dictionary.items():
+                            matches = re.findall(trigger, line)
                             if matches:
                                 for event in events:
                                     await event_manager.new_event(event)
@@ -147,8 +147,8 @@ def generate_graph(workflow):
 """
         for command in commands:
             label += f"    <TR><TD>{command['name']}</TD></TR>"
-            for pattern in command.get('patterns', []):
-                for events_to_fire in pattern.values():
+            for trigger in command.get('events', []):
+                for events_to_fire in trigger.values():
                     for event_to_fire in events_to_fire:
                         edges.add((event, event_to_fire))
         label += "</TABLE>>"
